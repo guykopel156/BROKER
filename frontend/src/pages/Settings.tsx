@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, type ReactElement } from 'reac
 import { Button, Card, Input, Modal } from '../components/common';
 import { fetchSettings, updateSettings, fetchHealth } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const INTERVAL_OPTIONS = [
   { label: '5 min', value: 5 },
@@ -30,7 +31,13 @@ function Settings(): ReactElement {
     { name: 'Claude API', isConnected: false },
     { name: 'Polygon.io', isConnected: false },
   ]);
+  const [twoFaQrCode, setTwoFaQrCode] = useState('');
+  const [twoFaSecret, setTwoFaSecret] = useState('');
+  const [twoFaCode, setTwoFaCode] = useState('');
+  const [isTwoFaEnabled, setIsTwoFaEnabled] = useState(false);
+  const [showTwoFaSetup, setShowTwoFaSetup] = useState(false);
   const { showToast } = useToast();
+  const { token } = useAuth();
 
   useEffect(() => {
     async function loadSettings(): Promise<void> {
@@ -64,9 +71,60 @@ function Settings(): ReactElement {
       }
     }
 
+    async function checkTwoFa(): Promise<void> {
+      try {
+        const response = await fetch('http://localhost:4000/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const result = await response.json();
+        if (result.data?.isTwoFactorEnabled) {
+          setIsTwoFaEnabled(true);
+        }
+      } catch { /* skip */ }
+    }
+
     loadSettings();
     checkConnections();
-  }, [showToast]);
+    checkTwoFa();
+  }, [showToast, token]);
+
+  const handleSetup2FA = useCallback(async (): Promise<void> => {
+    try {
+      const response = await fetch('http://localhost:4000/api/auth/2fa/setup', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const result = await response.json();
+      if (result.data) {
+        setTwoFaQrCode(result.data.qrCode);
+        setTwoFaSecret(result.data.secret);
+        setShowTwoFaSetup(true);
+      }
+    } catch {
+      showToast('Failed to setup 2FA', 'error');
+    }
+  }, [token, showToast]);
+
+  const handleVerify2FA = useCallback(async (): Promise<void> => {
+    try {
+      const response = await fetch('http://localhost:4000/api/auth/2fa/verify', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: twoFaCode }),
+      });
+      const result = await response.json();
+      if (result.data?.success) {
+        setIsTwoFaEnabled(true);
+        setShowTwoFaSetup(false);
+        setTwoFaCode('');
+        showToast('2FA enabled successfully!', 'success');
+      } else {
+        showToast('Invalid code — try again', 'error');
+      }
+    } catch {
+      showToast('Verification failed', 'error');
+    }
+  }, [token, twoFaCode, showToast]);
 
   const handleToggleTradingMode = useCallback((): void => {
     if (isPaperTrading) {
@@ -117,6 +175,60 @@ function Settings(): ReactElement {
             </div>
           ))}
         </div>
+      </Card>
+
+      {/* Two-Factor Authentication */}
+      <Card title="Two-Factor Authentication">
+        {isTwoFaEnabled ? (
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-profit" />
+            <span className="text-sm font-medium text-profit">2FA is enabled</span>
+          </div>
+        ) : !showTwoFaSetup ? (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-text-primary dark:text-dark-text-primary">Protect your account</p>
+              <p className="text-xs text-text-muted dark:text-dark-text-muted mt-1">
+                Use Google Authenticator or any TOTP app
+              </p>
+            </div>
+            <Button onClick={handleSetup2FA}>Enable 2FA</Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
+              1. Scan this QR code with Google Authenticator
+            </p>
+            {twoFaQrCode && (
+              <div className="flex justify-center p-4 bg-white rounded-lg">
+                <img src={twoFaQrCode} alt="2FA QR Code" className="w-48 h-48" />
+              </div>
+            )}
+            <div className="text-xs text-text-muted dark:text-dark-text-muted">
+              Or enter manually: <code className="bg-surface-tertiary dark:bg-dark-surface-tertiary px-2 py-0.5 rounded text-xs">{twoFaSecret}</code>
+            </div>
+            <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
+              2. Enter the 6-digit code from the app
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={twoFaCode}
+                onChange={(e) => setTwoFaCode(e.target.value)}
+                placeholder="000000"
+                maxLength={6}
+                className="w-32 px-3 py-2 text-center text-lg tracking-widest rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface text-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <Button onClick={handleVerify2FA} disabled={twoFaCode.length !== 6}>Verify & Enable</Button>
+            </div>
+            <button
+              onClick={() => setShowTwoFaSetup(false)}
+              className="text-xs text-text-muted dark:text-dark-text-muted hover:text-text-primary dark:hover:text-dark-text-primary"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </Card>
 
       {/* Trading Mode */}
