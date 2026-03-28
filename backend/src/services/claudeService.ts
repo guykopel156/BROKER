@@ -81,19 +81,41 @@ class ClaudeService {
       lines.push('\nNo open positions.');
     }
 
-    lines.push('\n=== MARKET DATA ===');
+    const availableCash = context.portfolio.availableCash;
+    lines.push(`\n=== BUDGET CONSTRAINT: You have $${availableCash.toFixed(2)} to spend ===`);
+    lines.push(`ONLY recommend stocks where price <= $${availableCash.toFixed(2)}`);
+
+    lines.push('\n=== MARKET DATA (USE THESE EXACT PRICES) ===');
+    const affordableStocks: string[] = [];
+    const expensiveStocks: string[] = [];
+
     for (const stock of context.marketData) {
+      const maxShares = Math.floor(availableCash * 0.95 / stock.price);
       let line =
-        `${stock.symbol}: $${stock.price.toFixed(2)} | ` +
+        `${stock.symbol}: PRICE=$${stock.price.toFixed(2)} | ` +
         `Change: ${stock.changePercent.toFixed(2)}% | ` +
-        `Vol: ${stock.volume}`;
+        `Vol: ${stock.volume} | ` +
+        `You can buy: ${maxShares} shares`;
 
       if (stock.rsi !== undefined) line += ` | RSI: ${stock.rsi.toFixed(1)}`;
       if (stock.macd !== undefined) line += ` | MACD: ${stock.macd.toFixed(2)}`;
       if (stock.movingAvg20 !== undefined) line += ` | MA20: $${stock.movingAvg20.toFixed(2)}`;
       if (stock.movingAvg50 !== undefined) line += ` | MA50: $${stock.movingAvg50.toFixed(2)}`;
 
-      lines.push(line);
+      if (maxShares > 0) {
+        affordableStocks.push(line + ' ✅ AFFORDABLE');
+      } else {
+        expensiveStocks.push(line + ' ❌ TOO EXPENSIVE');
+      }
+    }
+
+    if (affordableStocks.length > 0) {
+      lines.push('\nAFFORDABLE (can buy):');
+      affordableStocks.forEach((s) => lines.push(s));
+    }
+    if (expensiveStocks.length > 0) {
+      lines.push('\nTOO EXPENSIVE (skip these):');
+      expensiveStocks.forEach((s) => lines.push(s));
     }
 
     if (context.news.length > 0) {
