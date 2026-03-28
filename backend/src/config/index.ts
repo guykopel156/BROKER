@@ -7,6 +7,8 @@ interface AppConfig {
   mongoUri: string;
   corsOrigin: string;
   nodeEnv: string;
+  ibkrBaseUrl: string;
+  ibkrAccountId: string;
 }
 
 function getEnvVar(key: string, fallback?: string): string {
@@ -22,6 +24,8 @@ const config: AppConfig = {
   mongoUri: getEnvVar('MONGO_URI'),
   corsOrigin: getEnvVar('CORS_ORIGIN', 'http://localhost:3000'),
   nodeEnv: getEnvVar('NODE_ENV', 'development'),
+  ibkrBaseUrl: getEnvVar('IBKR_BASE_URL', 'https://localhost:5000/v1/api'),
+  ibkrAccountId: getEnvVar('IBKR_ACCOUNT_ID', ''),
 };
 
 export default config;
