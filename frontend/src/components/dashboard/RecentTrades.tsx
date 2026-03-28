@@ -21,13 +21,20 @@ const STATUS_COLOR_MAP: Record<TradeStatus, string> = {
   pending: 'text-warning',
 };
 
+const FAILURE_REASONS: Record<string, string> = {
+  failed: 'Market is closed or order was rejected by IBKR',
+};
+
 function TradeCard({ trade }: { trade: Trade }): ReactElement {
   const profitLoss = trade.profitLoss ?? 0;
   const hasProfitLoss = trade.profitLoss !== undefined;
   const isProfit = hasProfitLoss && profitLoss >= 0;
+  const isFailed = trade.status === 'failed';
 
   return (
-    <div className="p-4 border border-border dark:border-dark-border rounded-xl bg-surface dark:bg-dark-surface-secondary">
+    <div className={`p-4 border rounded-xl bg-surface dark:bg-dark-surface-secondary ${
+      isFailed ? 'border-loss/50' : 'border-border dark:border-dark-border'
+    }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <Badge variant={ACTION_VARIANT_MAP[trade.action]}>
@@ -56,6 +63,14 @@ function TradeCard({ trade }: { trade: Trade }): ReactElement {
         {trade.timestamp} &middot; {trade.strategy}
       </div>
 
+      {isFailed && (
+        <div className="mt-2 px-3 py-2 rounded-lg bg-loss-light/50 dark:bg-red-900/20 border border-loss/20">
+          <p className="text-xs font-medium text-loss">
+            Failed: {FAILURE_REASONS[trade.status] ?? 'Unknown error'}
+          </p>
+        </div>
+      )}
+
       <div className="mt-3 p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
           <span className="font-semibold text-primary">Reasoning: </span>
@@ -75,11 +90,19 @@ function RecentTrades({ trades }: RecentTradesProps): ReactElement {
         </h2>
         <Badge variant="default">LIVE FEED</Badge>
       </div>
-      <div className="flex flex-col gap-3">
-        {trades.map((trade) => (
-          <TradeCard key={trade.id} trade={trade} />
-        ))}
-      </div>
+      {trades.length === 0 ? (
+        <div className="p-8 border border-border dark:border-dark-border rounded-xl bg-surface dark:bg-dark-surface-secondary text-center">
+          <p className="text-sm text-text-muted dark:text-dark-text-muted">
+            No trades executed yet
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {trades.map((trade) => (
+            <TradeCard key={trade.id} trade={trade} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

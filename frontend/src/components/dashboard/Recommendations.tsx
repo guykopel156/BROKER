@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
 
 import { Badge } from '../common';
+import MiniChart from './MiniChart';
 import { fetchRecommendations } from '../../services/api';
 
 import type { RecommendationData } from '../../services/api';
@@ -100,6 +101,12 @@ function Recommendations(): ReactElement {
                   )}
                 </div>
               </div>
+
+              {rec.symbol && (
+                <div className="my-3 rounded-lg overflow-hidden border border-border dark:border-dark-border">
+                  <MiniChart symbol={rec.symbol} />
+                </div>
+              )}
 
               <div className="p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
                 <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
