@@ -78,11 +78,29 @@ function ChatWidget(): ReactElement {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
-              <div className="text-center py-8">
-                <div className="text-3xl mb-2">🤖</div>
-                <p className="text-sm text-text-muted dark:text-dark-text-muted">
-                  Ask me anything about your portfolio, trades, or market analysis
+              <div className="flex flex-col items-center gap-4 py-4">
+                <div className="text-3xl">🤖</div>
+                <p className="text-sm text-text-muted dark:text-dark-text-muted text-center">
+                  Your AI trading assistant
                 </p>
+                <div className="flex flex-col gap-2 w-full">
+                  {[
+                    { label: '📊 What should I buy now?', msg: 'What stocks should I buy right now with my current budget?' },
+                    { label: '💰 Show my portfolio', msg: 'Show me my current portfolio and positions' },
+                    { label: '🔍 Run new analysis', msg: 'Run a new analysis cycle now' },
+                    { label: '📈 Best growth stocks?', msg: 'What are the best growth stocks under $10 right now?' },
+                    { label: '⚠️ Top 3 recommendations', msg: 'Give me your top 3 stock recommendations with reasoning' },
+                    { label: '🧠 Explain last trade', msg: 'Explain the reasoning behind the last recommendation' },
+                  ].map((option) => (
+                    <button
+                      key={option.label}
+                      onClick={() => { setInput(option.msg); }}
+                      className="w-full text-left px-3 py-2 text-xs rounded-lg border border-border dark:border-dark-border bg-surface dark:bg-dark-surface hover:bg-surface-tertiary dark:hover:bg-dark-surface-tertiary text-text-secondary dark:text-dark-text-secondary transition-colors"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {messages.map((msg, index) => (
