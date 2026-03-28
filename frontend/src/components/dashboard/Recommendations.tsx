@@ -2,9 +2,26 @@ import React, { useState, useEffect, useCallback, type ReactElement } from 'reac
 
 import { Badge } from '../common';
 import MiniChart from './MiniChart';
-import { fetchRecommendations } from '../../services/api';
+import { fetchRecommendations, fetchPositions } from '../../services/api';
 
 import type { RecommendationData } from '../../services/api';
+
+interface HeldPosition {
+  symbol: string;
+  shares: number;
+  avgPrice: number;
+  currentPrice: number;
+  pnl: number;
+  pnlPercent: number;
+}
+
+interface IbkrPosition {
+  ticker: string;
+  position: number;
+  avgPrice: number;
+  mktPrice: number;
+  unrealizedPnl: number;
+}
 
 const ACTION_COLORS: Record<string, string> = {
   BUY: 'text-profit',
@@ -66,6 +83,7 @@ function formatCountdown(seconds: number): string {
 function Recommendations(): ReactElement {
   const [recommendations, setRecommendations] = useState<RecommendationData[]>([]);
   const [prices, setPrices] = useState<Record<string, StockPrice>>({});
+  const [holdings, setHoldings] = useState<Record<string, HeldPosition>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [countdown, setCountdown] = useState(0);
 
@@ -92,6 +110,29 @@ function Recommendations(): ReactElement {
         }
       }
       setPrices(priceMap);
+
+      // Fetch current holdings
+      try {
+        const positions = await fetchPositions() as IbkrPosition[];
+        if (Array.isArray(positions)) {
+          const holdingsMap: Record<string, HeldPosition> = {};
+          for (const pos of positions) {
+            holdingsMap[pos.ticker] = {
+              symbol: pos.ticker,
+              shares: pos.position,
+              avgPrice: pos.avgPrice,
+              currentPrice: pos.mktPrice,
+              pnl: pos.unrealizedPnl,
+              pnlPercent: pos.avgPrice > 0
+                ? ((pos.mktPrice - pos.avgPrice) / pos.avgPrice) * 100
+                : 0,
+            };
+          }
+          setHoldings(holdingsMap);
+        }
+      } catch {
+        // No positions
+      }
     } catch {
       // No data yet
     }
@@ -152,6 +193,7 @@ function Recommendations(): ReactElement {
   const stockPrice = rec?.symbol ? prices[rec.symbol] : undefined;
   const totalCost = stockPrice && rec ? stockPrice.price * rec.quantity : 0;
   const isPositiveChange = stockPrice ? stockPrice.changePercent >= 0 : false;
+  const currentHolding = rec?.symbol ? holdings[rec.symbol] : undefined;
 
   return (
     <div className="flex flex-col gap-3">
@@ -275,6 +317,55 @@ function Recommendations(): ReactElement {
                   <div className="mt-2 px-3 py-1.5 rounded-md bg-primary/5 dark:bg-primary/10">
                     <p className="text-xs text-text-muted dark:text-dark-text-muted">
                       Why {rec.quantity} shares: Budget ÷ ${stockPrice.price.toFixed(2)} per share = {Math.floor(10.67 * 0.95 / stockPrice.price)} shares max (keeping 5% cash reserve)
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Current Holding Info */}
+            {currentHolding && (
+              <div className={`mb-4 p-3 rounded-lg border ${
+                currentHolding.pnl >= 0
+                  ? 'bg-profit-light/30 dark:bg-green-900/10 border-profit/30'
+                  : 'bg-loss-light/30 dark:bg-red-900/10 border-loss/30'
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold text-text-muted dark:text-dark-text-muted">YOU OWN THIS STOCK</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div>
+                    <span className="text-[10px] text-text-muted dark:text-dark-text-muted block">Shares</span>
+                    <span className="text-sm font-bold text-text-primary dark:text-dark-text-primary">{currentHolding.shares}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-text-muted dark:text-dark-text-muted block">Avg Cost</span>
+                    <span className="text-sm font-bold text-text-primary dark:text-dark-text-primary">${currentHolding.avgPrice.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-text-muted dark:text-dark-text-muted block">Current</span>
+                    <span className="text-sm font-bold text-text-primary dark:text-dark-text-primary">${currentHolding.currentPrice.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-text-muted dark:text-dark-text-muted block">P&L</span>
+                    <span className={`text-sm font-bold ${currentHolding.pnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                      {currentHolding.pnl >= 0 ? '+' : ''}${currentHolding.pnl.toFixed(2)} ({currentHolding.pnlPercent.toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+                {rec.action === 'SELL' && (
+                  <div className="mt-2 pt-2 border-t border-loss/20">
+                    <p className="text-xs text-loss font-medium">
+                      Sell recommendation: {currentHolding.pnl < 0
+                        ? `This position is down ${Math.abs(currentHolding.pnlPercent).toFixed(1)}%. Better opportunities may exist.`
+                        : `Lock in ${currentHolding.pnlPercent.toFixed(1)}% profit and reinvest in higher-growth stocks.`}
+                    </p>
+                  </div>
+                )}
+                {rec.action === 'BUY' && (
+                  <div className="mt-2 pt-2 border-t border-profit/20">
+                    <p className="text-xs text-profit font-medium">
+                      Adding to position: Agent sees more upside potential for this stock.
                     </p>
                   </div>
                 )}
