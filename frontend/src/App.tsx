@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { ToastContainer, ErrorBoundary } from './components/common';
 import Layout from './components/Layout';
+import ChatWidget from './components/ChatWidget';
 import AppRoutes from './routes';
 
 function App(): ReactElement {
@@ -17,6 +18,7 @@ function App(): ReactElement {
               <AppRoutes />
             </Layout>
             <ToastContainer />
+            <ChatWidget />
           </BrowserRouter>
         </ErrorBoundary>
       </ToastProvider>
