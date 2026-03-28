@@ -85,12 +85,12 @@ function ChatWidget(): ReactElement {
                 </p>
                 <div className="flex flex-col gap-2 w-full">
                   {[
-                    { label: '📊 What should I buy now?', msg: 'What stocks should I buy right now with my current budget?' },
-                    { label: '💰 Show my portfolio', msg: 'Show me my current portfolio and positions' },
+                    { label: '📊 What should I buy now?', msg: 'What stocks should I buy right now with my current budget? Answer in bullet points.' },
+                    { label: '🎯 Explain your strategy', msg: 'Explain your current trading strategy in clear bullet points: what are you looking for, why these stocks, what signals matter, and what is your plan for my portfolio?' },
+                    { label: '💰 Show my portfolio', msg: 'Show me my current portfolio and positions in bullet points with numbers.' },
                     { label: '🔍 Run new analysis', msg: 'Run a new analysis cycle now' },
-                    { label: '📈 Best growth stocks?', msg: 'What are the best growth stocks under $10 right now?' },
-                    { label: '⚠️ Top 3 recommendations', msg: 'Give me your top 3 stock recommendations with reasoning' },
-                    { label: '🧠 Explain last trade', msg: 'Explain the reasoning behind the last recommendation' },
+                    { label: '📈 Best growth stocks?', msg: 'What are the best growth stocks I can afford right now? List each one in bullet points with price, why its good, and how many shares I can buy.' },
+                    { label: '🧠 Explain recommendations', msg: 'Explain each of your current recommendations in bullet points: stock name, price, why you picked it, what strategy, and what is the expected outcome.' },
                   ].map((option) => (
                     <button
                       key={option.label}
@@ -109,13 +109,25 @@ function ChatWidget(): ReactElement {
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                  className={`max-w-[85%] px-3 py-2 rounded-xl text-sm ${
                     msg.role === 'user'
                       ? 'bg-primary text-white rounded-br-sm'
                       : 'bg-surface-tertiary dark:bg-dark-surface-tertiary text-text-primary dark:text-dark-text-primary rounded-bl-sm'
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === 'assistant' ? (
+                    <div
+                      className="chat-content whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{
+                        __html: msg.content
+                          .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>')
+                          .replace(/^[•-] (.+)$/gm, '<div class="flex gap-1.5 ml-1"><span class="text-primary">•</span><span>$1</span></div>')
+                          .replace(/^#{1,3} (.+)$/gm, '<div class="font-bold text-text-primary dark:text-dark-text-primary mt-2 mb-1">$1</div>')
+                      }}
+                    />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))}

@@ -153,13 +153,26 @@ ${actionResult ? `\n=== ACTION TAKEN ===\n${actionResult}` : ''}
 - The user can ask you to: pause trading, resume trading, run a new analysis cycle
 - You can see all recent recommendations and their reasoning
 
+=== RESPONSE FORMAT ===
+- ALWAYS respond in clear bullet points (use • or -)
+- Each point should be one clear idea with specific data
+- Use sections with headers when explaining strategies or multiple stocks
+- Example format:
+  **SNDL — Cannabis Catalyst Play**
+  • Price: $1.31
+  • Why: Rescheduling news, 1.6M volume
+  • Shares: 7 (fits $10 budget)
+  • Risk: Stop loss at $1.10
+
 === RULES ===
-- Be concise but informative
+- Be concise but informative — bullet points, not paragraphs
 - Use numbers and data from the context above
 - If the user asks about a stock, reference the live data provided
 - If an action was taken, confirm it to the user
-- Speak naturally, like a knowledgeable trading partner
-- Use $ for prices, % for percentages`;
+- Speak like a smart trading partner, not a textbook
+- Use $ for prices, % for percentages
+- When explaining strategy, list each rule/criteria as a bullet point
+- When showing recommendations, list each stock separately with its own section`;
 
   const messages = [
     ...(history ?? []).map((msg) => ({
