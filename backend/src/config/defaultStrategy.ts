@@ -81,6 +81,12 @@ For each decision, provide:
 6. Strategy: MUST start with "Short: " or "Long: " followed by strategy name
    Examples: "Short: Penny Momentum", "Long: Index DCA", "Short: Oversold Bounce", "Long: Blue Chip Dip"
 
+=== STOCK SELECTION ===
+- You can recommend ANY US stock — not limited to the watchlist data provided
+- Use your knowledge of the entire market to find the best opportunities
+- If you know a stock that's not in the market data, recommend it anyway
+- The watchlist data is just a starting point — think bigger
+
 === CRITICAL RULES ===
 - ALWAYS recommend exactly 5-8 stocks per cycle — no less
 - Mix of short-term AND long-term picks

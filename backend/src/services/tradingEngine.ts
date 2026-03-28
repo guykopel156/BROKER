@@ -15,20 +15,8 @@ import {
 import type { ISettings } from '../models';
 import type { MarketContext, TradeDecision } from '../types/claude';
 
-const DEFAULT_WATCHLIST = [
-  // Penny / sub-$5 stocks
-  'SNDL', 'TELL', 'MULN', 'XELA', 'CLOV',
-  'WISH', 'GSAT', 'OPEN', 'DNA', 'SKLZ',
-  // Leveraged ETFs (often $2-$10)
-  'TQQQ', 'SQQQ', 'UVXY', 'LABU', 'SOXL',
-  // Sub-$20 growth
-  'SOFI', 'PLTR', 'NIO', 'RIVN', 'LCID',
-  // Large caps (for context)
-  'AAPL', 'NVDA', 'TSLA',
-];
-const MIN_CASH_RESERVE_PERCENT = 5;
-const MAX_OPEN_POSITIONS = 10;
-const MAX_POSITION_PERCENT = 30;
+// Reference tickers for market context — Claude can recommend ANY stock
+const MARKET_CONTEXT_TICKERS = ['SPY', 'QQQ', 'NVDA'];
 
 let engineTimer: NodeJS.Timeout | null = null;
 let isRunning = false;
@@ -309,14 +297,19 @@ async function buildMarketContext(): Promise<MarketContext> {
       : 0,
   }));
 
+  // Get previous recommendations to keep monitoring those stocks
+  const prevRecs = await Recommendation.find().sort({ cycleTimestamp: -1 }).limit(10);
+  const prevSymbols = prevRecs.map((r) => r.symbol).filter(Boolean);
+
   const watchlistSymbols = [
-    ...DEFAULT_WATCHLIST,
+    ...MARKET_CONTEXT_TICKERS,
     ...ibkrPositions.map((p) => p.ticker),
+    ...prevSymbols,
   ];
   const uniqueSymbols = [...new Set(watchlistSymbols)];
 
   const marketData = await marketDataService.getFullStockData(uniqueSymbols);
-  const news = await marketDataService.getNews(uniqueSymbols, 15);
+  const news = await marketDataService.getNews(uniqueSymbols.slice(0, 3), 15);
 
   return {
     portfolio: {
@@ -361,34 +354,14 @@ async function validateDecision(
     return false;
   }
 
-  // Check cash reserve for BUY orders
+  // Check if we can afford this BUY
   if (decision.action === 'BUY') {
-    const minCash = portfolio.totalValue * (MIN_CASH_RESERVE_PERCENT / 100);
     const orderCost = decision.quantity * (getStockPrice(decision.symbol, context) ?? 0);
 
-    if (portfolio.availableCash - orderCost < minCash) {
+    if (orderCost > portfolio.availableCash) {
       await createAuditLog({
         action: 'TRADE_REJECTED',
-        details: `Insufficient cash reserve. Need $${minCash.toFixed(2)} minimum. Available: $${portfolio.availableCash.toFixed(2)}`,
-      });
-      return false;
-    }
-
-    // Check max position size
-    const maxPositionValue = portfolio.totalValue * (MAX_POSITION_PERCENT / 100);
-    if (orderCost > maxPositionValue) {
-      await createAuditLog({
-        action: 'TRADE_REJECTED',
-        details: `Position too large ($${orderCost.toFixed(2)} > max $${maxPositionValue.toFixed(2)})`,
-      });
-      return false;
-    }
-
-    // Check max open positions
-    if (portfolio.openPositions.length >= MAX_OPEN_POSITIONS) {
-      await createAuditLog({
-        action: 'TRADE_REJECTED',
-        details: `Max open positions reached (${MAX_OPEN_POSITIONS})`,
+        details: `Can't afford: $${orderCost.toFixed(2)} > available $${portfolio.availableCash.toFixed(2)}`,
       });
       return false;
     }
