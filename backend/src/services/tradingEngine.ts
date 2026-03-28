@@ -168,28 +168,10 @@ async function runCycle(): Promise<void> {
       claudeResponse: JSON.stringify(decisions),
     });
 
-    // Filter out unaffordable BUY recommendations
+    // Save ALL recommendations (including ones with 0 shares)
     const availableCash = context.portfolio.availableCash;
-    const affordableDecisions = decisions.filter((decision) => {
-      if (decision.action !== 'BUY') return true;
-      const stockPrice = getStockPrice(decision.symbol, context);
-      if (!stockPrice || stockPrice <= 0) return true;
-      const maxShares = Math.floor(availableCash * 0.95 / stockPrice);
-      if (maxShares <= 0) {
-        createAuditLog({
-          action: 'TRADE_FILTERED',
-          details: `Filtered ${decision.symbol}: price $${stockPrice.toFixed(2)} > budget $${availableCash.toFixed(2)}`,
-        });
-        return false;
-      }
-      // Correct the quantity if Claude over-estimated
-      decision.quantity = Math.min(decision.quantity, maxShares);
-      return true;
-    });
-
-    // Only save recommendation if it's different from the latest one
     const cycleTimestamp = new Date();
-    for (const decision of affordableDecisions) {
+    for (const decision of decisions) {
       const lastRec = await Recommendation.findOne({
         symbol: decision.symbol,
         action: decision.action,
@@ -217,9 +199,21 @@ async function runCycle(): Promise<void> {
 
     // WhatsApp alerts handled by scheduler (market open/close only)
 
+    // Filter affordable decisions for execution only
+    const executableDecisions = decisions.filter((decision) => {
+      if (decision.action !== 'BUY') return true;
+      if (decision.quantity <= 0) return false;
+      const stockPrice = getStockPrice(decision.symbol, context);
+      if (!stockPrice || stockPrice <= 0) return false;
+      const maxShares = Math.floor(availableCash * 0.95 / stockPrice);
+      if (maxShares <= 0) return false;
+      decision.quantity = Math.min(decision.quantity, maxShares);
+      return true;
+    });
+
     // Only execute trades when market is open
     if (isMarketOpen()) {
-      for (const decision of affordableDecisions) {
+      for (const decision of executableDecisions) {
         if (decision.action === 'HOLD') continue;
 
         const isValid = await validateDecision(decision, context, settings);

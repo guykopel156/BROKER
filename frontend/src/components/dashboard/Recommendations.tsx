@@ -286,8 +286,15 @@ function Recommendations(): ReactElement {
             </div>
 
             {/* Trade Details */}
-            {rec.quantity > 0 && (
+            {rec.action === 'BUY' && (
               <div className="mb-4">
+                {rec.quantity === 0 && (
+                  <div className="p-3 mb-3 rounded-lg bg-warning-light/20 dark:bg-yellow-900/10 border border-warning/20 text-center">
+                    <span className="text-xs font-medium text-yellow-800 dark:text-yellow-200">
+                      Watchlist — can't afford yet. Buy when budget allows.
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
                   <div className="text-center">
                     <span className="text-xs text-text-muted dark:text-dark-text-muted block">Shares</span>

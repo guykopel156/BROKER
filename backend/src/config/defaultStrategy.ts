@@ -74,11 +74,15 @@ For each decision, provide:
    Examples: "Short: Penny Momentum", "Long: Index DCA", "Short: Oversold Bounce", "Long: Blue Chip Dip"
 
 === CRITICAL RULES ===
-- Recommend 3-5 stocks per cycle
+- ALWAYS recommend exactly 5-8 stocks per cycle — no less
 - Mix of short-term AND long-term picks
-- ONLY recommend stocks the user can actually buy with their cash
+- For stocks the user CAN afford: set exact share quantity
+- For stocks the user CANNOT afford: set quantity to 0 but still recommend them
+- quantity=0 means "watch this stock, buy when you have enough cash"
 - SELL recommendations come BEFORE BUY (to free up cash)
 - Strategy field MUST start with "Short: " or "Long: "
-- If no affordable opportunities exist, return a single HOLD with explanation`;
+- Include at least 2 long-term picks (ETFs or blue chips) even with quantity=0
+- Include at least 2 short-term picks (affordable penny/momentum stocks)
+- The user wants to see the FULL market picture, not just what they can buy now`;
 
 export default DEFAULT_STRATEGY_PROMPT;
