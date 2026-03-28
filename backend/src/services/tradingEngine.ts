@@ -194,22 +194,28 @@ async function runCycle(): Promise<void> {
       return b.confidence - a.confidence;
     });
 
-    // Greedy allocation: highest confidence gets max shares, then next gets remaining
+    // Greedy allocation: short-term gets ALL budget first, long-term only if affordable
     let remainingBudget = spendableBudget;
     for (const decision of sorted) {
       if (decision.action === 'BUY') {
+        const isLong = decision.strategy.toLowerCase().startsWith('long');
         const stockPrice = getStockPrice(decision.symbol, context);
+
         if (stockPrice && stockPrice > 0) {
           const maxAffordable = Math.floor(remainingBudget / stockPrice);
-          if (maxAffordable <= 0) {
-            decision.quantity = 0; // Can't afford — watchlist only
+
+          if (isLong && maxAffordable <= 0) {
+            // Long-term but can't afford — watchlist, don't waste budget
+            decision.quantity = 0;
+          } else if (maxAffordable <= 0) {
+            decision.quantity = 0;
           } else {
             decision.quantity = Math.min(decision.quantity, maxAffordable);
             remainingBudget -= decision.quantity * stockPrice;
           }
-        } else if (decision.quantity > 0) {
-          // No price data — keep Claude's quantity but cap at reasonable amount
-          remainingBudget = Math.max(0, remainingBudget - 1);
+        } else {
+          // No price data — watchlist
+          decision.quantity = 0;
         }
       }
     }
