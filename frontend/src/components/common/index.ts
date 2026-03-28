@@ -6,3 +6,5 @@ export { default as Modal } from './Modal';
 export { default as Badge } from './Badge';
 export { default as Input } from './Input';
 export { default as ToastContainer } from './ToastContainer';
+export { default as ErrorBoundary } from './ErrorBoundary';
+export { default as LoadingSpinner } from './LoadingSpinner';
