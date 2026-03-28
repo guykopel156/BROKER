@@ -117,6 +117,23 @@ async function resumeEngine(): Promise<void> {
   await startEngine();
 }
 
+// ── Market Hours ──
+
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const utcMinute = now.getUTCMinutes();
+  const day = now.getUTCDay();
+
+  if (day === 0 || day === 6) return false;
+
+  const utcTime = utcHour * 60 + utcMinute;
+  const marketOpen = 14 * 60 + 30; // 9:30 AM ET = 14:30 UTC
+  const marketClose = 21 * 60; // 4:00 PM ET = 21:00 UTC
+
+  return utcTime >= marketOpen && utcTime < marketClose;
+}
+
 // ── Main Trading Cycle ──
 
 async function runCycle(): Promise<void> {
@@ -171,13 +188,21 @@ async function runCycle(): Promise<void> {
       }
     }
 
-    for (const decision of decisions) {
-      if (decision.action === 'HOLD') continue;
+    // Only execute trades when market is open
+    if (isMarketOpen()) {
+      for (const decision of decisions) {
+        if (decision.action === 'HOLD') continue;
 
-      const isValid = await validateDecision(decision, context, settings);
-      if (!isValid) continue;
+        const isValid = await validateDecision(decision, context, settings);
+        if (!isValid) continue;
 
-      await executeTrade(decision);
+        await executeTrade(decision);
+      }
+    } else {
+      await createAuditLog({
+        action: 'MARKET_CLOSED',
+        details: 'Market is closed. Recommendations saved but no trades executed.',
+      });
     }
 
     await updatePortfolioPnl(context);
