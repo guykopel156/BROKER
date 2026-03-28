@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
+import React, { useState, useEffect, useCallback, useRef, type ReactElement } from 'react';
 
 import { Badge } from '../common';
 import MiniChart from './MiniChart';
-import { fetchRecommendations } from '../../services/api';
+import { fetchRecommendations, fetchSettings } from '../../services/api';
 
 import type { RecommendationData } from '../../services/api';
 
@@ -57,15 +57,29 @@ function ArrowButton({ direction, onClick }: { direction: 'left' | 'right'; onCl
   );
 }
 
+function formatCountdown(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 function Recommendations(): ReactElement {
   const [recommendations, setRecommendations] = useState<RecommendationData[]>([]);
   const [prices, setPrices] = useState<Record<string, StockPrice>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [countdown, setCountdown] = useState(0);
+  const [intervalMinutes, setIntervalMinutes] = useState(15);
+  const lastCycleRef = useRef<Date | null>(null);
 
   const loadData = useCallback(async (): Promise<void> => {
     try {
       const data = await fetchRecommendations();
       setRecommendations(data);
+
+      // Track when last cycle happened
+      if (data.length > 0) {
+        lastCycleRef.current = new Date(data[0].cycleTimestamp);
+      }
 
       const priceMap: Record<string, StockPrice> = {};
       for (const rec of data) {
@@ -90,11 +104,40 @@ function Recommendations(): ReactElement {
     }
   }, []);
 
+  // Load settings for interval
+  useEffect(() => {
+    async function loadInterval(): Promise<void> {
+      try {
+        const settings = await fetchSettings();
+        setIntervalMinutes(settings.tradingIntervalMinutes);
+      } catch {
+        // Keep default
+      }
+    }
+    loadInterval();
+  }, []);
+
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // Countdown timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!lastCycleRef.current) {
+        setCountdown(0);
+        return;
+      }
+
+      const nextCycle = new Date(lastCycleRef.current.getTime() + intervalMinutes * 60 * 1000);
+      const remaining = Math.max(0, Math.floor((nextCycle.getTime() - Date.now()) / 1000));
+      setCountdown(remaining);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [intervalMinutes]);
 
   const handlePrev = useCallback((): void => {
     setCurrentIndex((prev) => (prev === 0 ? recommendations.length - 1 : prev - 1));
@@ -123,12 +166,32 @@ function Recommendations(): ReactElement {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
-          Claude Recommendations
-        </h2>
-        <span className="text-xs text-text-muted dark:text-dark-text-muted">
-          {recommendations.length > 0 ? `${currentIndex + 1} / ${recommendations.length}` : 'Waiting...'}
-        </span>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
+            Claude Recommendations
+          </h2>
+          {recommendations.length > 1 && (
+            <span className="text-xs text-text-muted dark:text-dark-text-muted">
+              {currentIndex + 1} / {recommendations.length}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {countdown > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-tertiary dark:bg-dark-surface-tertiary">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <span className="text-xs font-mono font-semibold text-text-primary dark:text-dark-text-primary">
+                {formatCountdown(countdown)}
+              </span>
+            </div>
+          )}
+          {countdown === 0 && recommendations.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+              <span className="text-xs font-semibold text-primary">Analyzing...</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {recommendations.length === 0 || !rec ? (
