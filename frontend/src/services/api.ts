@@ -97,6 +97,11 @@ export async function fetchRecentTrades(limit: number = 20): Promise<TradeData[]
   return response.data.data;
 }
 
+export async function fetchIbkrTradeHistory(): Promise<TradeData[]> {
+  const response = await api.get('/trades/ibkr-history');
+  return response.data.data;
+}
+
 export async function fetchAllTrades(symbol?: string, action?: string): Promise<TradeData[]> {
   const params = new URLSearchParams();
   if (symbol) params.set('symbol', symbol);

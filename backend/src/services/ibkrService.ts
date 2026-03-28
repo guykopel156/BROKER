@@ -11,6 +11,7 @@ import type {
   IbkrOrderRequest,
   IbkrOrderResponse,
   IbkrOrderStatus,
+  IbkrTradeRecord,
 } from '../types/ibkr';
 
 const TICKLE_INTERVAL_MS = 55000;
@@ -217,6 +218,14 @@ class IbkrService {
     await this.ensureAuthenticated();
     const response = await this.get<{ orders: IbkrOrderStatus[] }>('/iserver/account/orders');
     return response.orders ?? [];
+  }
+
+  async getTradeHistory(): Promise<IbkrTradeRecord[]> {
+    await this.ensureAuthenticated();
+    // Must call accounts first per IBKR API requirement
+    await this.get<unknown>('/iserver/accounts');
+    const response = await this.get<IbkrTradeRecord[]>('/iserver/account/trades');
+    return response ?? [];
   }
 
   // ── Helpers ──

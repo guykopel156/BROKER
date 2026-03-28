@@ -59,3 +59,20 @@ export interface IbkrOrderStatus {
   avgPrice: number;
   lastExecutionTime: string;
 }
+
+export interface IbkrTradeRecord {
+  execution_id: string;
+  symbol: string;
+  side: string;
+  size: number;
+  price: number;
+  order_ref: string;
+  account: string;
+  conid: number;
+  exchange: string;
+  net_amount: number;
+  trade_time: string;
+  trade_time_r: number;
+  commission: number;
+  realized_pnl: number;
+}
