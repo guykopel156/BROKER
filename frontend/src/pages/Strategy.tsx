@@ -226,9 +226,9 @@ function Strategy(): ReactElement {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={recommendations.filter((r) => r.action === 'BUY').map((r) => ({
+                    data={recommendations.filter((r) => r.action === 'BUY' && r.quantity > 0).map((r) => ({
                       name: r.symbol,
-                      value: r.quantity > 0 ? r.quantity : 1,
+                      value: r.quantity,
                       shares: r.quantity,
                       strategy: r.strategy,
                     }))}
@@ -240,7 +240,7 @@ function Strategy(): ReactElement {
                     dataKey="value"
                     label={({ name }) => name}
                   >
-                    {recommendations.filter((r) => r.action === 'BUY').map((_, index) => {
+                    {recommendations.filter((r) => r.action === 'BUY' && r.quantity > 0).map((_, index) => {
                       const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
                       return <Cell key={index} fill={colors[index % colors.length]} />;
                     })}
