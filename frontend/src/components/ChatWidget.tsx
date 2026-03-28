@@ -152,8 +152,16 @@ function ChatWidget(): ReactElement {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
+          {/* Quick actions + Input */}
           <div className="px-3 py-3 border-t border-border dark:border-dark-border">
+            {messages.length > 0 && !isLoading && (
+              <button
+                onClick={() => setMessages([])}
+                className="w-full mb-2 px-2 py-1.5 text-[10px] font-medium text-primary hover:text-primary-hover border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                ← Back to quick options
+              </button>
+            )}
             <div className="flex gap-2">
               <input
                 type="text"
