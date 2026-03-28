@@ -56,11 +56,13 @@ For each decision, provide:
 6. Strategy name (e.g., "Penny Momentum", "Breakout", "Oversold Bounce", "Growth")
 
 === CRITICAL RULES ===
-- ALWAYS recommend at least one BUY if there is available cash and any opportunity exists
-- Even with $10, find stocks you can afford and recommend them
+- ALWAYS recommend 3-5 different stocks per cycle, ranked by opportunity quality
+- Even with $10, find multiple stocks you can afford and recommend them
+- Spread recommendations across different sectors and price ranges
 - Show specific stock symbols with exact share quantities
 - Reference specific price levels, indicators, and catalysts
 - Be aggressive — the user wants growth, not preservation
-- If you see a strong opportunity, recommend it with high confidence`;
+- If you see a strong opportunity, recommend it with high confidence
+- Return an array of 3-5 decisions, NOT just one`;
 
 export default DEFAULT_STRATEGY_PROMPT;
