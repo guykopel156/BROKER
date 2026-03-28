@@ -7,6 +7,7 @@ export interface IRecommendation extends Document {
   reasoning: string;
   confidence: number;
   strategy: string;
+  holdType: 'short' | 'long';
   cycleTimestamp: Date;
 }
 
@@ -18,6 +19,7 @@ const recommendationSchema = new Schema<IRecommendation>(
     reasoning: { type: String, required: true },
     confidence: { type: Number, required: true },
     strategy: { type: String, default: '' },
+    holdType: { type: String, default: 'short', enum: ['short', 'long'] },
     cycleTimestamp: { type: Date, default: Date.now, index: true },
   },
   { timestamps: true }

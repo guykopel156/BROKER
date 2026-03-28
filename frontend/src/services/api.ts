@@ -120,6 +120,7 @@ export interface RecommendationData {
   reasoning: string;
   confidence: number;
   strategy: string;
+  holdType: 'short' | 'long';
   cycleTimestamp: string;
 }
 

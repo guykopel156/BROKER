@@ -200,6 +200,7 @@ async function runCycle(): Promise<void> {
         lastRec.quantity === decision.quantity;
 
       if (!isDuplicate) {
+        const isLongTerm = decision.strategy.toLowerCase().startsWith('long');
         await Recommendation.create({
           action: decision.action,
           symbol: decision.symbol,
@@ -207,6 +208,7 @@ async function runCycle(): Promise<void> {
           reasoning: decision.reasoning,
           confidence: decision.confidence,
           strategy: decision.strategy,
+          holdType: isLongTerm ? 'long' : 'short',
           cycleTimestamp,
         });
       }

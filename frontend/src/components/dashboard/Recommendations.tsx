@@ -250,6 +250,13 @@ function Recommendations(): ReactElement {
                 <Badge variant={ACTION_BADGE[rec.action] ?? 'default'}>
                   {rec.action}
                 </Badge>
+                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${
+                  rec.holdType === 'long'
+                    ? 'bg-profit/20 text-profit border border-profit/30'
+                    : 'bg-warning/20 text-warning border border-warning/30'
+                }`}>
+                  {rec.holdType === 'long' ? 'LONG-TERM' : 'SHORT-TERM'}
+                </span>
                 {rec.symbol && (
                   <div>
                     <span className="text-xl font-bold text-text-primary dark:text-dark-text-primary">
