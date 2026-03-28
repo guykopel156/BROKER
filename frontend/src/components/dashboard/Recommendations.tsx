@@ -28,27 +28,45 @@ function ConfidenceBar({ value }: { value: number }): ReactElement {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="h-1.5 w-16 rounded-full bg-surface-tertiary dark:bg-dark-surface-tertiary">
+      <div className="h-2 w-20 rounded-full bg-surface-tertiary dark:bg-dark-surface-tertiary">
         <div
           className={`h-full rounded-full ${color} transition-all`}
           style={{ width: `${Math.min(value, 100)}%` }}
         />
       </div>
-      <span className="text-xs font-medium text-text-muted dark:text-dark-text-muted">{value}%</span>
+      <span className="text-sm font-bold text-text-muted dark:text-dark-text-muted">{value}%</span>
     </div>
+  );
+}
+
+function ArrowButton({ direction, onClick }: { direction: 'left' | 'right'; onClick: () => void }): ReactElement {
+  return (
+    <button
+      onClick={onClick}
+      className="absolute top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-dark-surface-secondary/80 dark:bg-dark-surface/80 border border-border dark:border-dark-border text-text-primary dark:text-dark-text-primary flex items-center justify-center hover:bg-primary hover:text-white hover:border-primary transition-all shadow-lg"
+      style={{ [direction === 'left' ? 'left' : 'right']: '-12px' }}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        {direction === 'left' ? (
+          <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+        ) : (
+          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+        )}
+      </svg>
+    </button>
   );
 }
 
 function Recommendations(): ReactElement {
   const [recommendations, setRecommendations] = useState<RecommendationData[]>([]);
   const [prices, setPrices] = useState<Record<string, StockPrice>>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   const loadData = useCallback(async (): Promise<void> => {
     try {
       const data = await fetchRecommendations();
       setRecommendations(data);
 
-      // Fetch prices for each recommended symbol
       const priceMap: Record<string, StockPrice> = {};
       for (const rec of data) {
         if (rec.symbol && !priceMap[rec.symbol]) {
@@ -78,6 +96,30 @@ function Recommendations(): ReactElement {
     return () => clearInterval(interval);
   }, [loadData]);
 
+  const handlePrev = useCallback((): void => {
+    setCurrentIndex((prev) => (prev === 0 ? recommendations.length - 1 : prev - 1));
+  }, [recommendations.length]);
+
+  const handleNext = useCallback((): void => {
+    setCurrentIndex((prev) => (prev === recommendations.length - 1 ? 0 : prev + 1));
+  }, [recommendations.length]);
+
+  const handleDotClick = useCallback((index: number): void => {
+    setCurrentIndex(index);
+  }, []);
+
+  // Reset index if recommendations change
+  useEffect(() => {
+    if (currentIndex >= recommendations.length) {
+      setCurrentIndex(0);
+    }
+  }, [recommendations.length, currentIndex]);
+
+  const rec = recommendations[currentIndex];
+  const stockPrice = rec?.symbol ? prices[rec.symbol] : undefined;
+  const totalCost = stockPrice && rec ? stockPrice.price * rec.quantity : 0;
+  const isPositiveChange = stockPrice ? stockPrice.changePercent >= 0 : false;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -85,96 +127,125 @@ function Recommendations(): ReactElement {
           Claude Recommendations
         </h2>
         <span className="text-xs text-text-muted dark:text-dark-text-muted">
-          Auto-refreshes every 60s
+          {recommendations.length > 0 ? `${currentIndex + 1} / ${recommendations.length}` : 'Waiting...'}
         </span>
       </div>
 
-      {recommendations.length === 0 ? (
+      {recommendations.length === 0 || !rec ? (
         <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-8 text-center">
           <p className="text-sm text-text-muted dark:text-dark-text-muted">
             No recommendations yet. Waiting for next trading cycle...
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {recommendations.map((rec) => {
-            const stockPrice = rec.symbol ? prices[rec.symbol] : undefined;
-            const totalCost = stockPrice ? stockPrice.price * rec.quantity : 0;
+        <div className="relative">
+          {/* Arrows */}
+          {recommendations.length > 1 && (
+            <>
+              <ArrowButton direction="left" onClick={handlePrev} />
+              <ArrowButton direction="right" onClick={handleNext} />
+            </>
+          )}
 
-            return (
-              <div
-                key={rec._id}
-                className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-4"
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-3">
-                    <Badge variant={ACTION_BADGE[rec.action] ?? 'default'}>
-                      {rec.action}
-                    </Badge>
-                    {rec.symbol && (
-                      <span className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
-                        {rec.symbol}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <ConfidenceBar value={rec.confidence} />
-                    {rec.strategy && (
-                      <span className="text-xs text-text-muted dark:text-dark-text-muted">
-                        {rec.strategy}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Trade Details */}
-                {rec.quantity > 0 && (
-                  <div className="grid grid-cols-3 gap-3 mb-3 p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
-                    <div>
-                      <span className="text-xs text-text-muted dark:text-dark-text-muted">Shares</span>
-                      <div className="text-sm font-bold text-text-primary dark:text-dark-text-primary">
-                        {rec.quantity}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-text-muted dark:text-dark-text-muted">Price/Share</span>
-                      <div className="text-sm font-bold text-text-primary dark:text-dark-text-primary">
-                        {stockPrice ? `$${stockPrice.price.toFixed(2)}` : '...'}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-text-muted dark:text-dark-text-muted">Total Cost</span>
-                      <div className="text-sm font-bold text-text-primary dark:text-dark-text-primary">
-                        {totalCost > 0 ? `$${totalCost.toFixed(2)}` : '...'}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Mini Chart */}
+          {/* Card */}
+          <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5 mx-2">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Badge variant={ACTION_BADGE[rec.action] ?? 'default'}>
+                  {rec.action}
+                </Badge>
                 {rec.symbol && (
-                  <div className="my-3 rounded-lg overflow-hidden border border-border dark:border-dark-border">
-                    <MiniChart symbol={rec.symbol} />
+                  <div>
+                    <span className="text-xl font-bold text-text-primary dark:text-dark-text-primary">
+                      {rec.symbol}
+                    </span>
+                    {stockPrice && (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-sm font-semibold text-text-primary dark:text-dark-text-primary">
+                          ${stockPrice.price.toFixed(2)}
+                        </span>
+                        <span className={`text-xs font-medium ${isPositiveChange ? 'text-profit' : 'text-loss'}`}>
+                          {isPositiveChange ? '+' : ''}{stockPrice.changePercent.toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <ConfidenceBar value={rec.confidence} />
+                {rec.strategy && (
+                  <span className="text-xs font-medium text-primary">
+                    {rec.strategy}
+                  </span>
+                )}
+              </div>
+            </div>
 
-                {/* Reasoning */}
-                <div className="p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
-                  <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
-                    <span className={`font-semibold ${ACTION_COLORS[rec.action] ?? 'text-primary'}`}>
-                      Reasoning:{' '}
-                    </span>
-                    <span className="italic">{rec.reasoning}</span>
-                  </p>
+            {/* Trade Details */}
+            {rec.quantity > 0 && (
+              <div className="grid grid-cols-3 gap-3 mb-4 p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
+                <div className="text-center">
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted block">Shares</span>
+                  <div className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
+                    {rec.quantity}
+                  </div>
                 </div>
-
-                <div className="mt-2 text-xs text-text-muted dark:text-dark-text-muted">
-                  {new Date(rec.cycleTimestamp).toLocaleString()}
+                <div className="text-center">
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted block">Price/Share</span>
+                  <div className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
+                    {stockPrice ? `$${stockPrice.price.toFixed(2)}` : '...'}
+                  </div>
+                </div>
+                <div className="text-center">
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted block">Total Cost</span>
+                  <div className="text-lg font-bold text-primary">
+                    {totalCost > 0 ? `$${totalCost.toFixed(2)}` : '...'}
+                  </div>
                 </div>
               </div>
-            );
-          })}
+            )}
+
+            {/* Mini Chart */}
+            {rec.symbol && (
+              <div className="mb-4 rounded-lg overflow-hidden border border-border dark:border-dark-border">
+                <MiniChart symbol={rec.symbol} />
+              </div>
+            )}
+
+            {/* Reasoning */}
+            <div className="p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
+              <p className="text-sm text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+                <span className={`font-semibold ${ACTION_COLORS[rec.action] ?? 'text-primary'}`}>
+                  Reasoning:{' '}
+                </span>
+                <span className="italic">{rec.reasoning}</span>
+              </p>
+            </div>
+
+            {/* Timestamp */}
+            <div className="mt-3 text-xs text-text-muted dark:text-dark-text-muted">
+              {new Date(rec.cycleTimestamp).toLocaleString()}
+            </div>
+          </div>
+
+          {/* Dots */}
+          {recommendations.length > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              {recommendations.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleDotClick(index)}
+                  className={`rounded-full transition-all ${
+                    index === currentIndex
+                      ? 'w-6 h-2 bg-primary'
+                      : 'w-2 h-2 bg-border dark:bg-dark-border hover:bg-text-muted'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
