@@ -1,5 +1,5 @@
 import config from '../config';
-import { Settings, Trade } from '../models';
+import { Settings, Trade, Recommendation } from '../models';
 import ibkrService from './ibkrService';
 import claudeService from './claudeService';
 import marketDataService from './marketDataService';
@@ -135,6 +135,20 @@ async function runCycle(): Promise<void> {
       details: `Claude returned ${decisions.length} decision(s)`,
       claudeResponse: JSON.stringify(decisions),
     });
+
+    // Save all recommendations (including HOLD)
+    const cycleTimestamp = new Date();
+    for (const decision of decisions) {
+      await Recommendation.create({
+        action: decision.action,
+        symbol: decision.symbol,
+        quantity: decision.quantity,
+        reasoning: decision.reasoning,
+        confidence: decision.confidence,
+        strategy: decision.strategy,
+        cycleTimestamp,
+      });
+    }
 
     for (const decision of decisions) {
       if (decision.action === 'HOLD') continue;

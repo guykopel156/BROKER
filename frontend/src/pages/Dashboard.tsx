@@ -7,31 +7,17 @@ import {
   EquityCurve,
   EngineHealth,
   Watchlist,
-  AlertHistory,
+  Recommendations,
 } from '../components/dashboard';
 import { LoadingSpinner } from '../components/common';
 import {
   fetchPortfolioSummary,
-  fetchAuditLogs,
   fetchRecentTrades,
   fetchPositions,
 } from '../services/api';
 
 import type { PortfolioSummary, Trade, EquityPoint, EngineHealthData, WatchlistItem } from '../types';
-import type { AlertItem } from '../mocks/alertsData';
 import type { TradeData } from '../services/api';
-
-type AlertType = 'trade' | 'loss-limit' | 'engine-paused' | 'error';
-
-function mapAuditAction(action: string): AlertType {
-  if (action.includes('TRADE_EXECUTED') || action.includes('TRADE_REJECTED')) return 'trade';
-  if (action.includes('TRADE_FAILED')) return 'error';
-  if (action.includes('LOSS')) return 'loss-limit';
-  if (action.includes('ENGINE') || action.includes('PAUSE') || action.includes('RESUME')) return 'engine-paused';
-  if (action.includes('CYCLE_START') || action.includes('CLAUDE_RESPONSE')) return 'trade';
-  if (action.includes('ERROR')) return 'error';
-  return 'engine-paused';
-}
 
 const EMPTY_PORTFOLIO: PortfolioSummary = {
   totalValue: 0,
@@ -64,7 +50,6 @@ function mapTradeData(t: TradeData): Trade {
 function Dashboard(): ReactElement {
   const [portfolio, setPortfolio] = useState<PortfolioSummary>(EMPTY_PORTFOLIO);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [equityData] = useState<EquityPoint[]>([]);
   const [engineHealth] = useState<EngineHealthData>({
     apiLatencyMs: 0,
@@ -78,7 +63,6 @@ function Dashboard(): ReactElement {
 
   const loadLiveData = useCallback(async (): Promise<void> => {
     try {
-      // Fetch portfolio
       const summary = await fetchPortfolioSummary() as Record<string, number>;
       const positions = await fetchPositions() as Array<Record<string, unknown>>;
 
@@ -99,24 +83,10 @@ function Dashboard(): ReactElement {
     }
 
     try {
-      // Fetch recent trades from DB
       const recentTrades = await fetchRecentTrades(10);
       setTrades(recentTrades.map(mapTradeData));
     } catch {
       // No trades yet
-    }
-
-    try {
-      // Fetch audit logs as alerts
-      const logs = await fetchAuditLogs(20);
-      setAlerts(logs.map((log) => ({
-        id: log._id,
-        type: mapAuditAction(log.action),
-        message: log.details,
-        timestamp: new Date(log.createdAt).toLocaleString(),
-      })));
-    } catch {
-      // No logs yet
     }
 
     setIsLoading(false);
@@ -141,7 +111,7 @@ function Dashboard(): ReactElement {
       )}
       {!isLive && (
         <div className="px-3 py-1.5 bg-warning-light dark:bg-yellow-900/30 border border-warning/30 rounded-lg text-xs font-medium text-yellow-800 dark:text-yellow-200 text-center">
-          Backend unreachable — showing empty data. Start the backend and IBKR Gateway.
+          Backend unreachable — start the backend and IBKR Gateway
         </div>
       )}
 
@@ -151,8 +121,8 @@ function Dashboard(): ReactElement {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
+          <Recommendations />
           <RecentTrades trades={trades} />
-          <AlertHistory alerts={alerts} />
         </div>
 
         <div className="flex flex-col gap-4">

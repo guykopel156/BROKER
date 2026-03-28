@@ -105,6 +105,24 @@ export async function fetchAllTrades(symbol?: string, action?: string): Promise<
   return response.data.data;
 }
 
+// ── Recommendations ──
+
+export interface RecommendationData {
+  _id: string;
+  action: 'BUY' | 'SELL' | 'HOLD';
+  symbol: string;
+  quantity: number;
+  reasoning: string;
+  confidence: number;
+  strategy: string;
+  cycleTimestamp: string;
+}
+
+export async function fetchRecommendations(): Promise<RecommendationData[]> {
+  const response = await api.get('/recommendations');
+  return response.data.data;
+}
+
 // ── Health ──
 
 export async function fetchHealth(): Promise<{ status: string }> {
