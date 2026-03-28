@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
 
-const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://localhost:27017/broker';
+import config from './index';
 
 async function connectDatabase(): Promise<void> {
   try {
-    await mongoose.connect(MONGO_URI);
+    await mongoose.connect(config.mongoUri);
     console.log('MongoDB connected successfully');
   } catch (error) {
     console.error('MongoDB connection failed:', error);
