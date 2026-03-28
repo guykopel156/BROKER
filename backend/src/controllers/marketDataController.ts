@@ -1,5 +1,7 @@
 import type { Request, Response } from 'express';
+import axios from 'axios';
 
+import config from '../config';
 import marketDataService from '../services/marketDataService';
 
 interface CacheEntry<T> {
@@ -10,6 +12,7 @@ interface CacheEntry<T> {
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const candleCache = new Map<string, CacheEntry<unknown[]>>();
 const priceCache = new Map<string, CacheEntry<unknown>>();
+const detailsCache = new Map<string, CacheEntry<unknown>>();
 
 function getCached<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
   const entry = cache.get(key);
@@ -72,4 +75,76 @@ async function getStockPrice(req: Request, res: Response): Promise<void> {
   res.json({ data });
 }
 
-export { getStockCandles, getStockPrice };
+async function getStockDetails(req: Request, res: Response): Promise<void> {
+  const symbol = req.params.symbol as string;
+
+  const cached = getCached(detailsCache, symbol);
+  if (cached) {
+    res.json({ data: cached });
+    return;
+  }
+
+  // Fetch ticker details from Polygon
+  let name = symbol;
+  let marketCap = 0;
+  let description = '';
+  let sector = '';
+  let exchange = '';
+
+  try {
+    const tickerResponse = await axios.get(
+      `https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${config.polygonApiKey}`,
+      { timeout: 10000 }
+    );
+    const tickerData = tickerResponse.data?.results;
+    if (tickerData) {
+      name = tickerData.name ?? symbol;
+      marketCap = tickerData.market_cap ?? 0;
+      description = tickerData.description ?? '';
+      sector = tickerData.sic_description ?? '';
+      exchange = tickerData.primary_exchange ?? '';
+    }
+  } catch {
+    // Skip details
+  }
+
+  // Fetch price data
+  let price = 0;
+  let open = 0;
+  let high = 0;
+  let low = 0;
+  let volume = 0;
+  let changePercent = 0;
+
+  try {
+    const priceData = await marketDataService.getStockPrice(symbol);
+    price = priceData.price;
+    open = priceData.open;
+    high = priceData.high;
+    low = priceData.low;
+    volume = priceData.volume;
+    changePercent = priceData.changePercent;
+  } catch {
+    // Skip price
+  }
+
+  const details = {
+    symbol,
+    name,
+    price,
+    open,
+    high,
+    low,
+    volume,
+    changePercent,
+    marketCap,
+    description: description.substring(0, 300),
+    sector,
+    exchange,
+  };
+
+  setCache(detailsCache, symbol, details);
+  res.json({ data: details });
+}
+
+export { getStockCandles, getStockPrice, getStockDetails };
