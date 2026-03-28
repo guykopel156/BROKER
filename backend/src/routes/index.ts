@@ -1,5 +1,7 @@
 import { Router } from 'express';
 
+import authRoutes from './authRoutes';
+import authMiddleware from '../middleware/authMiddleware';
 import portfolioRoutes from './portfolioRoutes';
 import orderRoutes from './orderRoutes';
 import settingsRoutes from './settingsRoutes';
@@ -12,14 +14,18 @@ import whatsappRoutes from './whatsappRoutes';
 
 const router = Router();
 
-router.use('/portfolio', portfolioRoutes);
-router.use('/orders', orderRoutes);
-router.use('/settings', settingsRoutes);
-router.use('/engine', engineRoutes);
-router.use('/trades', tradeRoutes);
-router.use('/recommendations', recommendationRoutes);
-router.use('/market', marketDataRoutes);
-router.use('/chat', chatRoutes);
-router.use('/whatsapp', whatsappRoutes);
+// Public routes
+router.use('/auth', authRoutes);
+
+// Protected routes — require login
+router.use('/portfolio', authMiddleware, portfolioRoutes);
+router.use('/orders', authMiddleware, orderRoutes);
+router.use('/settings', authMiddleware, settingsRoutes);
+router.use('/engine', authMiddleware, engineRoutes);
+router.use('/trades', authMiddleware, tradeRoutes);
+router.use('/recommendations', authMiddleware, recommendationRoutes);
+router.use('/market', authMiddleware, marketDataRoutes);
+router.use('/chat', authMiddleware, chatRoutes);
+router.use('/whatsapp', authMiddleware, whatsappRoutes);
 
 export default router;

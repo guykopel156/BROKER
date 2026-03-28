@@ -16,6 +16,9 @@ interface AppConfig {
   twilioAuthToken: string;
   twilioWhatsappFrom: string;
   whatsappToNumber: string;
+  jwtSecret: string;
+  adminUsername: string;
+  adminPassword: string;
 }
 
 function getEnvVar(key: string, fallback?: string): string {
@@ -40,6 +43,9 @@ const config: AppConfig = {
   twilioAuthToken: getEnvVar('TWILIO_AUTH_TOKEN', ''),
   twilioWhatsappFrom: getEnvVar('TWILIO_WHATSAPP_FROM', ''),
   whatsappToNumber: getEnvVar('WHATSAPP_TO_NUMBER', ''),
+  jwtSecret: getEnvVar('JWT_SECRET', 'broker-secret-change-in-production'),
+  adminUsername: getEnvVar('ADMIN_USERNAME', 'admin'),
+  adminPassword: getEnvVar('ADMIN_PASSWORD', 'admin123'),
 };
 
 export default config;

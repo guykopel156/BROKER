@@ -8,6 +8,15 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Add auth token to every request
+api.interceptors.request.use((requestConfig) => {
+  const token = localStorage.getItem('broker-token');
+  if (token) {
+    requestConfig.headers.Authorization = `Bearer ${token}`;
+  }
+  return requestConfig;
+});
+
 // ── Portfolio ──
 
 export async function fetchPortfolioSummary(): Promise<unknown> {

@@ -8,6 +8,7 @@ import { initializeSocket } from './services/socketService';
 import { startEngine } from './services/tradingEngine';
 import ibkrService from './services/ibkrService';
 import { startDailyScheduler } from './services/scheduler';
+import { ensureAdminExists } from './controllers/authController';
 import { errorHandler } from './middleware';
 import routes from './routes';
 
@@ -28,6 +29,7 @@ app.use(errorHandler);
 
 async function start(): Promise<void> {
   await connectDatabase();
+  await ensureAdminExists();
   initializeSocket(server);
   server.listen(config.port, () => {
     console.log(`Server running on port ${config.port}`);

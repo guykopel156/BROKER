@@ -2,6 +2,7 @@ import React, { useState, useCallback, type ReactElement } from 'react';
 import { NavLink } from 'react-router-dom';
 
 import { useThemeContext } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 interface NavItem {
   label: string;
@@ -19,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
 
 function Navbar(): ReactElement {
   const { isDark, toggleTheme } = useThemeContext();
+  const { logout, username } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleToggleMenu = useCallback((): void => {
@@ -73,6 +75,17 @@ function Navbar(): ReactElement {
                   <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
                 </svg>
               )}
+            </button>
+
+            {/* Logout */}
+            <button
+              onClick={logout}
+              className="p-2 rounded-lg text-text-secondary dark:text-dark-text-secondary hover:bg-loss-light dark:hover:bg-red-900/20 hover:text-loss transition-colors"
+              title={`Logout ${username ?? ''}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1H3zm7 4.5a.5.5 0 01.5.5v2.793l1.146-1.147a.5.5 0 01.708.708l-2 2a.5.5 0 01-.708 0l-2-2a.5.5 0 01.708-.708L9.5 10.793V8a.5.5 0 01.5-.5z" clipRule="evenodd" />
+              </svg>
             </button>
 
             {/* Hamburger — mobile only */}
