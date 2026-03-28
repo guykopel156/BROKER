@@ -37,6 +37,7 @@ function Strategy(): ReactElement {
   const [recommendations, setRecommendations] = useState<RecommendationData[]>([]);
   const [positions, setPositions] = useState<PositionWithSignal[]>([]);
   const [news, setNews] = useState<StockNews[]>([]);
+  const [prices, setPrices] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [shortCount, setShortCount] = useState(0);
   const [longCount, setLongCount] = useState(0);
@@ -51,6 +52,21 @@ function Strategy(): ReactElement {
       const longs = recs.filter((r) => r.holdType === 'long' || r.strategy?.toLowerCase().startsWith('long')).length;
       setShortCount(shorts);
       setLongCount(longs);
+
+      // Fetch prices for recommended stocks
+      const priceMap: Record<string, number> = {};
+      for (const rec of recs) {
+        if (rec.symbol && !priceMap[rec.symbol]) {
+          try {
+            const priceRes = await authFetch(`/market/${rec.symbol}/price`);
+            const priceData = await priceRes.json();
+            if (priceData.data?.price) {
+              priceMap[rec.symbol] = priceData.data.price;
+            }
+          } catch { /* skip */ }
+        }
+      }
+      setPrices(priceMap);
 
       // Positions
       try {
@@ -192,37 +208,66 @@ function Strategy(): ReactElement {
 
             {/* Stock Details Table */}
             <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-5 gap-2 text-[10px] font-semibold text-text-muted dark:text-dark-text-muted uppercase pb-1 border-b border-border dark:border-dark-border">
+              <div className="grid grid-cols-6 gap-2 text-[10px] font-semibold text-text-muted dark:text-dark-text-muted uppercase pb-1 border-b border-border dark:border-dark-border">
                 <span>Stock</span>
                 <span>Type</span>
                 <span className="text-right">Shares</span>
-                <span className="text-right">Est. Cost</span>
+                <span className="text-right">Price</span>
+                <span className="text-right">Total</span>
                 <span className="text-right">Sell Target</span>
               </div>
-              {recommendations.filter((r) => r.action === 'BUY').map((rec, index) => {
-                const isLong = rec.holdType === 'long' || rec.strategy?.toLowerCase().startsWith('long');
+              {(() => {
+                const buyRecs = recommendations.filter((r) => r.action === 'BUY');
                 const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
-                return (
-                  <div key={rec._id} className="grid grid-cols-5 gap-2 items-center py-1.5 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: colors[index % colors.length] }} />
-                      <span className="font-bold text-text-primary dark:text-dark-text-primary">{rec.symbol}</span>
+                let totalCost = 0;
+                let totalShares = 0;
+
+                const rows = buyRecs.map((rec, index) => {
+                  const isLong = rec.holdType === 'long' || rec.strategy?.toLowerCase().startsWith('long');
+                  const stockPrice = prices[rec.symbol] ?? 0;
+                  const cost = rec.quantity > 0 ? rec.quantity * stockPrice : 0;
+                  totalCost += cost;
+                  totalShares += rec.quantity;
+
+                  return (
+                    <div key={rec._id} className="grid grid-cols-6 gap-2 items-center py-1.5 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: colors[index % colors.length] }} />
+                        <span className="font-bold text-text-primary dark:text-dark-text-primary">{rec.symbol}</span>
+                      </div>
+                      <span className={`text-[10px] font-medium ${isLong ? 'text-profit' : 'text-warning'}`}>
+                        {isLong ? 'Long' : 'Short'}
+                      </span>
+                      <span className="text-right text-text-primary dark:text-dark-text-primary font-medium">
+                        {rec.quantity > 0 ? rec.quantity : '—'}
+                      </span>
+                      <span className="text-right text-text-secondary dark:text-dark-text-secondary">
+                        {stockPrice > 0 ? `$${stockPrice.toFixed(2)}` : '...'}
+                      </span>
+                      <span className="text-right text-text-primary dark:text-dark-text-primary font-medium">
+                        {cost > 0 ? `$${cost.toFixed(2)}` : 'Watch'}
+                      </span>
+                      <span className="text-right text-text-muted dark:text-dark-text-muted">
+                        {isLong ? 'Hold' : rec.confidence >= 70 ? '+20%' : '+10%'}
+                      </span>
                     </div>
-                    <span className={`text-[10px] font-medium ${isLong ? 'text-profit' : 'text-warning'}`}>
-                      {isLong ? 'Long' : 'Short'}
-                    </span>
-                    <span className="text-right text-text-primary dark:text-dark-text-primary font-medium">
-                      {rec.quantity > 0 ? rec.quantity : '—'}
-                    </span>
-                    <span className="text-right text-text-secondary dark:text-dark-text-secondary">
-                      {rec.quantity > 0 ? `~$${(rec.quantity * 2).toFixed(0)}` : 'Watch'}
-                    </span>
-                    <span className="text-right text-text-muted dark:text-dark-text-muted">
-                      {isLong ? 'Hold' : rec.confidence >= 70 ? '+20%' : '+10%'}
-                    </span>
-                  </div>
+                  );
+                });
+
+                return (
+                  <>
+                    {rows}
+                    <div className="grid grid-cols-6 gap-2 items-center py-2 text-xs border-t border-border dark:border-dark-border mt-1 font-bold">
+                      <span className="text-text-primary dark:text-dark-text-primary">TOTAL</span>
+                      <span />
+                      <span className="text-right text-text-primary dark:text-dark-text-primary">{totalShares}</span>
+                      <span />
+                      <span className="text-right text-primary">${totalCost.toFixed(2)}</span>
+                      <span />
+                    </div>
+                  </>
                 );
-              })}
+              })()}
             </div>
           </div>
         </div>
