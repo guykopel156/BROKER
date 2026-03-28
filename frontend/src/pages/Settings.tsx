@@ -173,13 +173,43 @@ function Settings(): ReactElement {
             <div key={conn.name} className="flex items-center justify-between">
               <span className="text-sm text-text-secondary dark:text-dark-text-secondary">{conn.name}</span>
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${conn.isConnected ? 'bg-profit' : 'bg-loss'}`} />
+                <span className={`w-2 h-2 rounded-full ${conn.isConnected ? 'bg-profit' : 'bg-loss animate-pulse'}`} />
                 <span className={`text-sm font-medium ${conn.isConnected ? 'text-profit' : 'text-loss'}`}>
                   {conn.isConnected ? 'Connected' : 'Disconnected'}
                 </span>
               </div>
             </div>
           ))}
+          <div className="flex items-center justify-between pt-3 border-t border-border dark:border-dark-border">
+            <span className="text-xs text-text-muted dark:text-dark-text-muted">Last checked: {new Date().toLocaleTimeString()}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                showToast('Checking connections...', 'info');
+                try {
+                  const response = await fetch('http://localhost:4000/api/status');
+                  const result = await response.json();
+                  const s = result.data;
+                  setConnections([
+                    { name: 'Backend Server', isConnected: s.backend },
+                    { name: 'MongoDB', isConnected: s.mongodb },
+                    { name: 'Claude API', isConnected: s.claude },
+                    { name: 'Polygon.io', isConnected: s.polygon },
+                    { name: 'IBKR Gateway', isConnected: s.ibkr },
+                    { name: 'WhatsApp', isConnected: s.whatsapp },
+                  ]);
+                  const allUp = s.backend && s.mongodb && s.claude && s.polygon && s.ibkr;
+                  showToast(allUp ? 'All systems operational!' : 'Some services are down', allUp ? 'success' : 'warning');
+                } catch {
+                  setConnections((prev) => prev.map((c) => ({ ...c, isConnected: false })));
+                  showToast('Backend not reachable', 'error');
+                }
+              }}
+            >
+              Check Now
+            </Button>
+          </div>
         </div>
       </Card>
 
