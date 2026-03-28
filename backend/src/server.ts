@@ -6,6 +6,7 @@ import config from './config';
 import connectDatabase from './config/database';
 import { initializeSocket } from './services/socketService';
 import { startEngine } from './services/tradingEngine';
+import ibkrService from './services/ibkrService';
 import { errorHandler } from './middleware';
 import routes from './routes';
 
@@ -29,6 +30,13 @@ async function start(): Promise<void> {
   initializeSocket(server);
   server.listen(config.port, () => {
     console.log(`Server running on port ${config.port}`);
+
+    // Keep IBKR session alive
+    if (config.ibkrAccountId) {
+      ibkrService.startKeepAlive();
+      console.log('IBKR keep-alive started (tickle every 55s)');
+    }
+
     startEngine().catch((err) => {
       console.error('Failed to start trading engine:', err);
     });
