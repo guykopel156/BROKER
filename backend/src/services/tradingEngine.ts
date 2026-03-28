@@ -297,19 +297,50 @@ async function buildMarketContext(): Promise<MarketContext> {
       : 0,
   }));
 
-  // Get previous recommendations to keep monitoring those stocks
+  // Get ALL stocks from the market (single API call, cached 30 min)
+  const allStocks = await marketDataService.getAllStocks();
+
+  // Convert to StockData format — top 50 by volume for Claude's context
+  const topStocks = allStocks
+    .filter((s) => s.v > 50000 && s.c > 0.01)
+    .sort((a, b) => b.v - a.v)
+    .slice(0, 50);
+
+  const marketData = topStocks.map((s) => ({
+    symbol: s.T,
+    price: s.c,
+    open: s.o,
+    high: s.h,
+    low: s.l,
+    volume: s.v,
+    changePercent: s.o > 0 ? ((s.c - s.o) / s.o) * 100 : 0,
+  }));
+
+  // Also include held positions and previous picks if not in top 50
   const prevRecs = await Recommendation.find().sort({ cycleTimestamp: -1 }).limit(10);
-  const prevSymbols = prevRecs.map((r) => r.symbol).filter(Boolean);
-
-  const watchlistSymbols = [
-    ...MARKET_CONTEXT_TICKERS,
+  const extraSymbols = [
     ...ibkrPositions.map((p) => p.ticker),
-    ...prevSymbols,
+    ...prevRecs.map((r) => r.symbol).filter(Boolean),
   ];
-  const uniqueSymbols = [...new Set(watchlistSymbols)];
+  const existingSymbols = new Set(marketData.map((s) => s.symbol));
+  for (const sym of extraSymbols) {
+    if (!existingSymbols.has(sym)) {
+      const found = allStocks.find((s) => s.T === sym);
+      if (found) {
+        marketData.push({
+          symbol: found.T,
+          price: found.c,
+          open: found.o,
+          high: found.h,
+          low: found.l,
+          volume: found.v,
+          changePercent: found.o > 0 ? ((found.c - found.o) / found.o) * 100 : 0,
+        });
+      }
+    }
+  }
 
-  const marketData = await marketDataService.getFullStockData(uniqueSymbols);
-  const news = await marketDataService.getNews(uniqueSymbols.slice(0, 3), 15);
+  const news = await marketDataService.getNews(MARKET_CONTEXT_TICKERS.slice(0, 1), 10);
 
   return {
     portfolio: {
@@ -320,7 +351,7 @@ async function buildMarketContext(): Promise<MarketContext> {
     },
     marketData,
     news,
-    watchlist: uniqueSymbols,
+    watchlist: marketData.map((s) => s.symbol),
   };
 }
 

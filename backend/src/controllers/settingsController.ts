@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { Settings } from '../models';
+import { stopEngine, startEngine } from '../services/tradingEngine';
 
 async function getSettings(_req: Request, res: Response): Promise<void> {
   let settings = await Settings.findOne();
@@ -30,6 +31,14 @@ async function updateSettings(req: Request, res: Response): Promise<void> {
   } else {
     Object.assign(settings, updates);
     await settings.save();
+  }
+
+  // Restart engine if interval changed
+  if (updates.tradingIntervalMinutes !== undefined) {
+    stopEngine();
+    startEngine().catch((err) => {
+      console.error('Failed to restart engine:', err);
+    });
   }
 
   res.json({ data: settings });
