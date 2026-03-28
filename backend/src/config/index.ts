@@ -9,6 +9,8 @@ interface AppConfig {
   nodeEnv: string;
   ibkrBaseUrl: string;
   ibkrAccountId: string;
+  anthropicApiKey: string;
+  claudeModel: string;
 }
 
 function getEnvVar(key: string, fallback?: string): string {
@@ -26,6 +28,8 @@ const config: AppConfig = {
   nodeEnv: getEnvVar('NODE_ENV', 'development'),
   ibkrBaseUrl: getEnvVar('IBKR_BASE_URL', 'https://localhost:5000/v1/api'),
   ibkrAccountId: getEnvVar('IBKR_ACCOUNT_ID', ''),
+  anthropicApiKey: getEnvVar('ANTHROPIC_API_KEY', ''),
+  claudeModel: getEnvVar('CLAUDE_MODEL', 'claude-sonnet-4-20250514'),
 };
 
 export default config;
