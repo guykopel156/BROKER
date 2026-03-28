@@ -12,6 +12,10 @@ interface AppConfig {
   anthropicApiKey: string;
   claudeModel: string;
   polygonApiKey: string;
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioWhatsappFrom: string;
+  whatsappToNumber: string;
 }
 
 function getEnvVar(key: string, fallback?: string): string {
@@ -32,6 +36,10 @@ const config: AppConfig = {
   anthropicApiKey: getEnvVar('ANTHROPIC_API_KEY', ''),
   claudeModel: getEnvVar('CLAUDE_MODEL', 'claude-sonnet-4-20250514'),
   polygonApiKey: getEnvVar('POLYGON_API_KEY', ''),
+  twilioAccountSid: getEnvVar('TWILIO_ACCOUNT_SID', ''),
+  twilioAuthToken: getEnvVar('TWILIO_AUTH_TOKEN', ''),
+  twilioWhatsappFrom: getEnvVar('TWILIO_WHATSAPP_FROM', ''),
+  whatsappToNumber: getEnvVar('WHATSAPP_TO_NUMBER', ''),
 };
 
 export default config;

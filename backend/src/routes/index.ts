@@ -8,6 +8,7 @@ import tradeRoutes from './tradeRoutes';
 import recommendationRoutes from './recommendationRoutes';
 import marketDataRoutes from './marketDataRoutes';
 import chatRoutes from './chatRoutes';
+import whatsappRoutes from './whatsappRoutes';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/trades', tradeRoutes);
 router.use('/recommendations', recommendationRoutes);
 router.use('/market', marketDataRoutes);
 router.use('/chat', chatRoutes);
+router.use('/whatsapp', whatsappRoutes);
 
 export default router;

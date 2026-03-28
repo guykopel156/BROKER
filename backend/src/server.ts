@@ -7,6 +7,7 @@ import connectDatabase from './config/database';
 import { initializeSocket } from './services/socketService';
 import { startEngine } from './services/tradingEngine';
 import ibkrService from './services/ibkrService';
+import { startDailyScheduler } from './services/scheduler';
 import { errorHandler } from './middleware';
 import routes from './routes';
 
@@ -40,6 +41,9 @@ async function start(): Promise<void> {
     startEngine().catch((err) => {
       console.error('Failed to start trading engine:', err);
     });
+
+    // Start WhatsApp daily scheduler
+    startDailyScheduler();
   });
 }
 
