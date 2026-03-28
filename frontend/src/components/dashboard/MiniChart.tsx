@@ -25,10 +25,15 @@ interface LinePoint {
   value: number;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('broker-token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function fetchWithRetry(url: string, retries: number = MAX_RETRIES): Promise<LinePoint[]> {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: getAuthHeaders() });
       const result = await response.json();
 
       if (result.data && result.data.length > 0) {

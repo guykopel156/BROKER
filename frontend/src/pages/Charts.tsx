@@ -3,7 +3,7 @@ import { createChart, type IChartApi, ColorType, LineSeries } from 'lightweight-
 
 import { useThemeContext } from '../context/ThemeContext';
 import { LoadingSpinner } from '../components/common';
-import { fetchPositions } from '../services/api';
+import { fetchPositions, authFetch } from '../services/api';
 
 type Timeframe = '1W' | '1M' | '3M' | '6M' | '1Y';
 
@@ -88,7 +88,7 @@ function FullChart({ symbol, timeframe }: { symbol: string; timeframe: Timeframe
 
     chartInstanceRef.current = chart;
 
-    fetch(`http://localhost:4000/api/market/${symbol}/candles?days=${TIMEFRAME_DAYS[timeframe]}`)
+    authFetch(`/market/${symbol}/candles?days=${TIMEFRAME_DAYS[timeframe]}`)
       .then((res) => res.json())
       .then((response) => {
         if (isCancelled) return;
@@ -155,7 +155,7 @@ function Charts(): ReactElement {
     setIsLoadingDetails(true);
     setStockDetails(null);
     try {
-      const response = await fetch(`http://localhost:4000/api/market/${symbol}/details`);
+      const response = await authFetch(`/market/${symbol}/details`);
       const result = await response.json();
       if (result.data) setStockDetails(result.data);
     } catch { /* skip */ }

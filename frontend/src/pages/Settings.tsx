@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
 
 import { Button, Card, Input, Modal } from '../components/common';
-import { fetchSettings, updateSettings } from '../services/api';
+import { fetchSettings, updateSettings, authFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -54,7 +54,7 @@ function Settings(): ReactElement {
 
     async function checkConnections(): Promise<void> {
       try {
-        const response = await fetch('http://localhost:4000/api/status');
+        const response = await authFetch('/status');
         const result = await response.json();
         const s = result.data;
         setConnections([
@@ -79,7 +79,7 @@ function Settings(): ReactElement {
 
     async function checkTwoFa(): Promise<void> {
       try {
-        const response = await fetch('http://localhost:4000/api/auth/me', {
+        const response = await authFetch('/auth/me', {
           headers: { Authorization: `Bearer ${token}` },
         });
         const result = await response.json();
@@ -96,7 +96,7 @@ function Settings(): ReactElement {
 
   const handleSetup2FA = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch('http://localhost:4000/api/auth/2fa/setup', {
+      const response = await authFetch('/auth/2fa/setup', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
@@ -113,7 +113,7 @@ function Settings(): ReactElement {
 
   const handleVerify2FA = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch('http://localhost:4000/api/auth/2fa/verify', {
+      const response = await authFetch('/auth/2fa/verify', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: twoFaCode }),
@@ -188,7 +188,7 @@ function Settings(): ReactElement {
               onClick={async () => {
                 showToast('Checking connections...', 'info');
                 try {
-                  const response = await fetch('http://localhost:4000/api/status');
+                  const response = await authFetch('/status');
                   const result = await response.json();
                   const s = result.data;
                   setConnections([

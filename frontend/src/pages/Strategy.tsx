@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, type ReactElement } from 'reac
 
 import { Badge, LoadingSpinner } from '../components/common';
 import MiniChart from '../components/dashboard/MiniChart';
-import { fetchPositions, fetchRecommendations } from '../services/api';
+import { fetchPositions, fetchRecommendations, authFetch } from '../services/api';
 
 import type { RecommendationData } from '../services/api';
 
@@ -103,14 +103,14 @@ function Strategy(): ReactElement {
       try {
         const symbols = recs.map((r) => r.symbol).filter(Boolean);
         if (symbols.length > 0) {
-          const response = await fetch(`http://localhost:4000/api/market/${symbols[0]}/details`);
+          const response = await authFetch(`/market/${symbols[0]}/details`);
           const result = await response.json();
           if (result.data) {
             // Fetch news for first 3 symbols
             const allNews: StockNews[] = [];
             for (const sym of symbols.slice(0, 3)) {
               try {
-                const newsResponse = await fetch(`http://localhost:4000/api/market/${sym}/details`);
+                const newsResponse = await authFetch(`/market/${sym}/details`);
                 const newsResult = await newsResponse.json();
                 if (newsResult.data?.description) {
                   allNews.push({
@@ -283,7 +283,6 @@ function Strategy(): ReactElement {
             ) : (
               <div className="flex flex-col gap-3">
                 {recommendations.map((rec) => {
-                  const isLong = rec.holdType === 'long' || rec.strategy?.toLowerCase().startsWith('long');
                   return (
                     <div key={`outlook-${rec._id}`} className="p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
                       <div className="flex items-center justify-between mb-1">
@@ -293,9 +292,7 @@ function Strategy(): ReactElement {
                         </span>
                       </div>
                       <p className="text-xs text-text-muted dark:text-dark-text-muted mb-1">
-                        {isLong
-                          ? `Long-term growth expected. Hold for months. ${rec.strategy}`
-                          : `Short-term play. Target: +10-50% in days. Exit on momentum loss.`}
+                        {rec.reasoning.substring(0, 120)}...
                       </p>
                       <div className="flex items-center gap-1">
                         {[1, 2, 3, 4, 5].map((star) => (

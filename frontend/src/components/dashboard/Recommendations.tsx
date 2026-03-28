@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, type ReactElement } from 'reac
 
 import { Badge } from '../common';
 import MiniChart from './MiniChart';
-import { fetchRecommendations, fetchPositions } from '../../services/api';
+import { fetchRecommendations, fetchPositions, authFetch } from '../../services/api';
 
 import type { RecommendationData } from '../../services/api';
 
@@ -96,7 +96,7 @@ function Recommendations(): ReactElement {
       for (const rec of data) {
         if (rec.symbol && !priceMap[rec.symbol]) {
           try {
-            const response = await fetch(`http://localhost:4000/api/market/${rec.symbol}/price`);
+            const response = await authFetch(`/market/${rec.symbol}/price`);
             const result = await response.json();
             if (result.data) {
               priceMap[rec.symbol] = {
@@ -148,7 +148,7 @@ function Recommendations(): ReactElement {
   useEffect(() => {
     async function fetchStatus(): Promise<void> {
       try {
-        const response = await fetch('http://localhost:4000/api/engine/cycle-status');
+        const response = await authFetch('/engine/cycle-status');
         const result = await response.json();
         if (result.data) {
           setCountdown(result.data.secondsUntilNext);

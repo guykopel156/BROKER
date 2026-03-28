@@ -17,6 +17,23 @@ api.interceptors.request.use((requestConfig) => {
   return requestConfig;
 });
 
+// ── Auth Fetch Helper ──
+
+export function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('broker-token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+export async function authFetch(path: string, options?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: { ...authHeaders(), ...options?.headers },
+  });
+}
+
 // ── Portfolio ──
 
 export async function fetchPortfolioSummary(): Promise<unknown> {

@@ -14,6 +14,7 @@ import {
   fetchPortfolioSummary,
   fetchRecentTrades,
   fetchPositions,
+  authFetch,
 } from '../services/api';
 
 import type { PortfolioSummary, Trade, EquityPoint, EngineHealthData, WatchlistItem } from '../types';
@@ -66,7 +67,7 @@ function Dashboard(): ReactElement {
   useEffect(() => {
     async function checkStatus(): Promise<void> {
       try {
-        const response = await fetch('http://localhost:4000/api/status');
+        const response = await authFetch('/status');
         const result = await response.json();
         setIbkrDown(!result.data?.ibkr);
       } catch {

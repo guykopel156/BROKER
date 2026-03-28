@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 
+import { authFetch } from '../services/api';
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -29,9 +31,13 @@ function ChatWidget(): ReactElement {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:4000/api/chat', {
+      const token = localStorage.getItem('broker-token');
+      const response = await authFetch('/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           message: userMessage,
           history: messages.slice(-10),
@@ -39,7 +45,8 @@ function ChatWidget(): ReactElement {
       });
 
       const data = await response.json();
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.data.reply }]);
+      const reply = data.data?.reply ?? data.error?.message ?? 'No response';
+      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
     } catch {
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, I could not connect to the server.' }]);
     } finally {

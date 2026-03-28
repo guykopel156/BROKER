@@ -46,8 +46,10 @@ function MarketStatusBar(): ReactElement {
 
       for (const symbol of TICKER_SYMBOLS) {
         try {
+          const token = localStorage.getItem('broker-token');
           const response = await fetch(
-            `http://localhost:4000/api/market/${symbol}/price`
+            `http://localhost:4000/api/market/${symbol}/price`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
           );
           const data = await response.json();
           const result = data.data;
