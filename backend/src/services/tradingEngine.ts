@@ -15,14 +15,15 @@ import type { ISettings } from '../models';
 import type { MarketContext, TradeDecision } from '../types/claude';
 
 const DEFAULT_WATCHLIST = [
-  // Large caps
-  'AAPL', 'MSFT', 'NVDA', 'TSLA', 'META',
-  // Mid/small caps with growth potential
+  // Penny / sub-$5 stocks
+  'SNDL', 'TELL', 'MULN', 'XELA', 'CLOV',
+  'WISH', 'GSAT', 'OPEN', 'DNA', 'SKLZ',
+  // Leveraged ETFs (often $2-$10)
+  'TQQQ', 'SQQQ', 'UVXY', 'LABU', 'SOXL',
+  // Sub-$20 growth
   'SOFI', 'PLTR', 'NIO', 'RIVN', 'LCID',
-  // Low-price / penny stocks
-  'SNDL', 'TELL', 'BBIG', 'MULN', 'XELA',
-  // ETFs
-  'SPY', 'QQQ',
+  // Large caps (for context)
+  'AAPL', 'NVDA', 'TSLA',
 ];
 const MIN_CASH_RESERVE_PERCENT = 5;
 const MAX_OPEN_POSITIONS = 10;
@@ -166,9 +167,28 @@ async function runCycle(): Promise<void> {
       claudeResponse: JSON.stringify(decisions),
     });
 
+    // Filter out unaffordable BUY recommendations
+    const availableCash = context.portfolio.availableCash;
+    const affordableDecisions = decisions.filter((decision) => {
+      if (decision.action !== 'BUY') return true;
+      const stockPrice = getStockPrice(decision.symbol, context);
+      if (!stockPrice || stockPrice <= 0) return true;
+      const maxShares = Math.floor(availableCash * 0.95 / stockPrice);
+      if (maxShares <= 0) {
+        createAuditLog({
+          action: 'TRADE_FILTERED',
+          details: `Filtered ${decision.symbol}: price $${stockPrice.toFixed(2)} > budget $${availableCash.toFixed(2)}`,
+        });
+        return false;
+      }
+      // Correct the quantity if Claude over-estimated
+      decision.quantity = Math.min(decision.quantity, maxShares);
+      return true;
+    });
+
     // Only save recommendation if it's different from the latest one
     const cycleTimestamp = new Date();
-    for (const decision of decisions) {
+    for (const decision of affordableDecisions) {
       const lastRec = await Recommendation.findOne({
         symbol: decision.symbol,
         action: decision.action,
@@ -194,7 +214,7 @@ async function runCycle(): Promise<void> {
 
     // Only execute trades when market is open
     if (isMarketOpen()) {
-      for (const decision of decisions) {
+      for (const decision of affordableDecisions) {
         if (decision.action === 'HOLD') continue;
 
         const isValid = await validateDecision(decision, context, settings);
