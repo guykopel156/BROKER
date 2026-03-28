@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
 
 import { Button, Card, Input, Modal } from '../components/common';
-import { fetchSettings, updateSettings, fetchHealth } from '../services/api';
+import { fetchSettings, updateSettings } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -54,12 +54,16 @@ function Settings(): ReactElement {
 
     async function checkConnections(): Promise<void> {
       try {
-        await fetchHealth();
+        const response = await fetch('http://localhost:4000/api/status');
+        const result = await response.json();
+        const s = result.data;
         setConnections([
-          { name: 'Backend Server', isConnected: true },
-          { name: 'MongoDB', isConnected: true },
-          { name: 'Claude API', isConnected: true },
-          { name: 'Polygon.io', isConnected: true },
+          { name: 'Backend Server', isConnected: s.backend },
+          { name: 'MongoDB', isConnected: s.mongodb },
+          { name: 'Claude API', isConnected: s.claude },
+          { name: 'Polygon.io', isConnected: s.polygon },
+          { name: 'IBKR Gateway', isConnected: s.ibkr },
+          { name: 'WhatsApp', isConnected: s.whatsapp },
         ]);
       } catch {
         setConnections([
@@ -67,6 +71,8 @@ function Settings(): ReactElement {
           { name: 'MongoDB', isConnected: false },
           { name: 'Claude API', isConnected: false },
           { name: 'Polygon.io', isConnected: false },
+          { name: 'IBKR Gateway', isConnected: false },
+          { name: 'WhatsApp', isConnected: false },
         ]);
       }
     }

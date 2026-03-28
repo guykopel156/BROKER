@@ -22,6 +22,10 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Status endpoint (no auth required for connection checks)
+import { handleFullStatus } from './controllers/statusController';
+app.get('/api/status', handleFullStatus);
+
 app.use('/api', routes);
 
 // Error handler must be last middleware

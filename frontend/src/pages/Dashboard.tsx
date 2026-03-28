@@ -60,6 +60,23 @@ function Dashboard(): ReactElement {
   const [watchlist] = useState<WatchlistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
+  const [ibkrDown, setIbkrDown] = useState(false);
+
+  // Check IBKR status
+  useEffect(() => {
+    async function checkStatus(): Promise<void> {
+      try {
+        const response = await fetch('http://localhost:4000/api/status');
+        const result = await response.json();
+        setIbkrDown(!result.data?.ibkr);
+      } catch {
+        setIbkrDown(true);
+      }
+    }
+    checkStatus();
+    const interval = setInterval(checkStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const loadLiveData = useCallback(async (): Promise<void> => {
     try {
@@ -104,12 +121,20 @@ function Dashboard(): ReactElement {
 
   return (
     <div className="flex flex-col gap-6">
-      {isLive && (
+      {ibkrDown && (
+        <div className="px-3 py-2 bg-loss-light dark:bg-red-900/20 border border-loss/30 rounded-lg flex items-center justify-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-loss animate-pulse" />
+          <span className="text-xs font-medium text-red-800 dark:text-red-200">
+            IBKR Gateway disconnected — log in at https://localhost:5000 to reconnect
+          </span>
+        </div>
+      )}
+      {isLive && !ibkrDown && (
         <div className="px-3 py-1.5 bg-profit-light dark:bg-green-900/30 border border-profit/30 rounded-lg text-xs font-medium text-green-800 dark:text-green-200 text-center">
           Live data from IBKR
         </div>
       )}
-      {!isLive && (
+      {!isLive && !ibkrDown && (
         <div className="px-3 py-1.5 bg-warning-light dark:bg-yellow-900/30 border border-warning/30 rounded-lg text-xs font-medium text-yellow-800 dark:text-yellow-200 text-center">
           Backend unreachable — start the backend and IBKR Gateway
         </div>
