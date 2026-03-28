@@ -15,15 +15,43 @@ interface MiniChartProps {
   symbol: string;
 }
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 15000;
+
+async function fetchWithRetry(url: string, retries: number = MAX_RETRIES): Promise<CandleBar[]> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (result.data && result.data.length > 0) {
+        return result.data;
+      }
+
+      if (result.error && attempt < retries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+    } catch {
+      if (attempt < retries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+    }
+  }
+  return [];
+}
+
 function MiniChart({ symbol }: MiniChartProps): ReactElement {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<IChartApi | null>(null);
   const { isDark } = useThemeContext();
-  const [hasData, setHasData] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
     if (!chartRef.current || !symbol) return;
+
+    let isCancelled = false;
 
     const bgColor = isDark ? '#1e293b' : '#ffffff';
     const gridColor = isDark ? '#334155' : '#e2e8f0';
@@ -66,23 +94,18 @@ function MiniChart({ symbol }: MiniChartProps): ReactElement {
       wickDownColor: '#ef4444',
     });
 
-    fetch(`http://localhost:4000/api/market/${symbol}/candles?days=30`)
-      .then((res) => res.json())
-      .then((response) => {
-        const candles: CandleBar[] = response.data;
-        if (!candles || candles.length === 0) {
-          setHasData(false);
-          setIsLoading(false);
+    fetchWithRetry(`http://localhost:4000/api/market/${symbol}/candles?days=30`)
+      .then((candles) => {
+        if (isCancelled) return;
+
+        if (candles.length === 0) {
+          setStatus('error');
           return;
         }
 
         series.setData(candles as never[]);
         chart.timeScale().fitContent();
-        setIsLoading(false);
-      })
-      .catch(() => {
-        setHasData(false);
-        setIsLoading(false);
+        setStatus('ready');
       });
 
     const handleResize = (): void => {
@@ -94,29 +117,22 @@ function MiniChart({ symbol }: MiniChartProps): ReactElement {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      isCancelled = true;
       window.removeEventListener('resize', handleResize);
       chart.remove();
       chartInstanceRef.current = null;
     };
   }, [symbol, isDark]);
 
-  if (!hasData) {
+  if (status === 'error') {
     return (
       <div className="h-[150px] flex items-center justify-center text-xs text-text-muted dark:text-dark-text-muted">
-        Chart temporarily unavailable (API rate limited)
+        Chart unavailable — API rate limited. Will retry next refresh.
       </div>
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="h-[150px] flex items-center justify-center text-xs text-text-muted dark:text-dark-text-muted">
-        Loading chart...
-      </div>
-    );
-  }
-
-  return <div ref={chartRef} className="w-full" />;
+  return <div ref={chartRef} className="w-full" style={{ minHeight: 150 }} />;
 }
 
 export default MiniChart;
