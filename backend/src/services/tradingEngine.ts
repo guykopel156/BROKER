@@ -160,7 +160,22 @@ async function runCycle(): Promise<void> {
     });
 
     const context = await buildMarketContext();
-    const decisions = await claudeService.getTradeDecisions(context, settings.strategyPrompt);
+
+    // Get previous recommendations for continuity
+    const previousRecs = await Recommendation.find()
+      .sort({ cycleTimestamp: -1 })
+      .limit(10);
+
+    const previousPicks = previousRecs.length > 0
+      ? previousRecs.map((r) => ({
+          symbol: r.symbol,
+          action: r.action,
+          quantity: r.quantity,
+          strategy: r.strategy,
+        }))
+      : undefined;
+
+    const decisions = await claudeService.getTradeDecisions(context, settings.strategyPrompt, previousPicks);
 
     await createAuditLog({
       action: 'CLAUDE_RESPONSE',

@@ -37,13 +37,14 @@ class ClaudeService {
 
   async getTradeDecisions(
     context: MarketContext,
-    strategyPrompt: string
+    strategyPrompt: string,
+    previousPicks?: Array<{ symbol: string; action: string; quantity: number; strategy: string }>
   ): Promise<TradeDecision[]> {
     if (!config.anthropicApiKey) {
       throw new AppError(500, 'CLAUDE_NOT_CONFIGURED', 'Anthropic API key is not configured');
     }
 
-    const userMessage = this.buildContextMessage(context);
+    const userMessage = this.buildContextMessage(context, previousPicks);
 
     const response = await this.client.messages.create({
       model: config.claudeModel,
@@ -60,7 +61,7 @@ class ClaudeService {
     return this.parseDecisions(content.text);
   }
 
-  private buildContextMessage(context: MarketContext): string {
+  private buildContextMessage(context: MarketContext, previousPicks?: Array<{ symbol: string; action: string; quantity: number; strategy: string }>): string {
     const lines: string[] = [];
 
     lines.push('=== CURRENT PORTFOLIO ===');
@@ -127,6 +128,16 @@ class ClaudeService {
         const symbolTag = item.symbol ? ` [${item.symbol}]` : '';
         lines.push(`- ${item.title}${symbolTag} (${item.source}, ${item.publishedAt})`);
       }
+    }
+
+    if (previousPicks && previousPicks.length > 0) {
+      lines.push('\n=== YOUR PREVIOUS RECOMMENDATIONS (last cycle) ===');
+      lines.push('Keep these UNLESS you have a strong reason to change. Stability is important.');
+      for (const pick of previousPicks) {
+        lines.push(`  ${pick.action} ${pick.symbol} — ${pick.quantity} shares — ${pick.strategy}`);
+      }
+      lines.push('If you want to change a pick, explain WHY in your reasoning.');
+      lines.push('Only drop a stock if: better opportunity found, fundamentals changed, or stop loss hit.');
     }
 
     lines.push('\n=== INSTRUCTIONS ===');
