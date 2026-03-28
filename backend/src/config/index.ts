@@ -11,6 +11,7 @@ interface AppConfig {
   ibkrAccountId: string;
   anthropicApiKey: string;
   claudeModel: string;
+  polygonApiKey: string;
 }
 
 function getEnvVar(key: string, fallback?: string): string {
@@ -30,6 +31,7 @@ const config: AppConfig = {
   ibkrAccountId: getEnvVar('IBKR_ACCOUNT_ID', ''),
   anthropicApiKey: getEnvVar('ANTHROPIC_API_KEY', ''),
   claudeModel: getEnvVar('CLAUDE_MODEL', 'claude-sonnet-4-20250514'),
+  polygonApiKey: getEnvVar('POLYGON_API_KEY', ''),
 };
 
 export default config;
