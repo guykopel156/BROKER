@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 
-import { pauseEngine, resumeEngine, runCycle } from '../services/tradingEngine';
+import { pauseEngine, resumeEngine, runCycle, getCycleStatus } from '../services/tradingEngine';
 import { getRecentLogs } from '../services/auditLogService';
 
 async function handlePause(_req: Request, res: Response): Promise<void> {
@@ -24,4 +24,8 @@ async function handleGetAuditLogs(req: Request, res: Response): Promise<void> {
   res.json({ data: logs });
 }
 
-export { handlePause, handleResume, handleRunCycle, handleGetAuditLogs };
+function handleCycleStatus(_req: Request, res: Response): void {
+  res.json({ data: getCycleStatus() });
+}
+
+export { handlePause, handleResume, handleRunCycle, handleGetAuditLogs, handleCycleStatus };

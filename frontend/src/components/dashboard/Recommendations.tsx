@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef, type ReactElement } from 'react';
+import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
 
 import { Badge } from '../common';
 import MiniChart from './MiniChart';
-import { fetchRecommendations, fetchSettings } from '../../services/api';
+import { fetchRecommendations } from '../../services/api';
 
 import type { RecommendationData } from '../../services/api';
 
@@ -68,18 +68,11 @@ function Recommendations(): ReactElement {
   const [prices, setPrices] = useState<Record<string, StockPrice>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [countdown, setCountdown] = useState(0);
-  const [intervalMinutes, setIntervalMinutes] = useState(15);
-  const lastCycleRef = useRef<Date | null>(null);
 
   const loadData = useCallback(async (): Promise<void> => {
     try {
       const data = await fetchRecommendations();
       setRecommendations(data);
-
-      // Track when last cycle happened
-      if (data.length > 0) {
-        lastCycleRef.current = new Date(data[0].cycleTimestamp);
-      }
 
       const priceMap: Record<string, StockPrice> = {};
       for (const rec of data) {
@@ -104,40 +97,37 @@ function Recommendations(): ReactElement {
     }
   }, []);
 
-  // Load settings for interval
-  useEffect(() => {
-    async function loadInterval(): Promise<void> {
-      try {
-        const settings = await fetchSettings();
-        setIntervalMinutes(settings.tradingIntervalMinutes);
-      } catch {
-        // Keep default
-      }
-    }
-    loadInterval();
-  }, []);
-
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Countdown timer
+  // Countdown timer from backend
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (!lastCycleRef.current) {
-        setCountdown(0);
-        return;
+    async function fetchStatus(): Promise<void> {
+      try {
+        const response = await fetch('http://localhost:4000/api/engine/cycle-status');
+        const result = await response.json();
+        if (result.data) {
+          setCountdown(result.data.secondsUntilNext);
+        }
+      } catch {
+        // Skip
       }
+    }
 
-      const nextCycle = new Date(lastCycleRef.current.getTime() + intervalMinutes * 60 * 1000);
-      const remaining = Math.max(0, Math.floor((nextCycle.getTime() - Date.now()) / 1000));
-      setCountdown(remaining);
+    fetchStatus();
+    const timer = setInterval(fetchStatus, 5000);
+    const tick = setInterval(() => {
+      setCountdown((prev) => Math.max(0, prev - 1));
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [intervalMinutes]);
+    return () => {
+      clearInterval(timer);
+      clearInterval(tick);
+    };
+  }, []);
 
   const handlePrev = useCallback((): void => {
     setCurrentIndex((prev) => (prev === 0 ? recommendations.length - 1 : prev - 1));
@@ -248,25 +238,46 @@ function Recommendations(): ReactElement {
 
             {/* Trade Details */}
             {rec.quantity > 0 && (
-              <div className="grid grid-cols-3 gap-3 mb-4 p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
-                <div className="text-center">
-                  <span className="text-xs text-text-muted dark:text-dark-text-muted block">Shares</span>
-                  <div className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
-                    {rec.quantity}
+              <div className="mb-4">
+                <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
+                  <div className="text-center">
+                    <span className="text-xs text-text-muted dark:text-dark-text-muted block">Shares</span>
+                    <div className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
+                      {rec.quantity}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-xs text-text-muted dark:text-dark-text-muted block">Price/Share</span>
+                    {stockPrice ? (
+                      <div className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
+                        ${stockPrice.price.toFixed(2)}
+                      </div>
+                    ) : (
+                      <div className="flex justify-center mt-1">
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <span className="text-xs text-text-muted dark:text-dark-text-muted block">Total Cost</span>
+                    {totalCost > 0 ? (
+                      <div className="text-lg font-bold text-primary">
+                        ${totalCost.toFixed(2)}
+                      </div>
+                    ) : (
+                      <div className="flex justify-center mt-1">
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="text-center">
-                  <span className="text-xs text-text-muted dark:text-dark-text-muted block">Price/Share</span>
-                  <div className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
-                    {stockPrice ? `$${stockPrice.price.toFixed(2)}` : '...'}
+                {stockPrice && (
+                  <div className="mt-2 px-3 py-1.5 rounded-md bg-primary/5 dark:bg-primary/10">
+                    <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                      Why {rec.quantity} shares: Budget ÷ ${stockPrice.price.toFixed(2)} per share = {Math.floor(10.67 * 0.95 / stockPrice.price)} shares max (keeping 5% cash reserve)
+                    </p>
                   </div>
-                </div>
-                <div className="text-center">
-                  <span className="text-xs text-text-muted dark:text-dark-text-muted block">Total Cost</span>
-                  <div className="text-lg font-bold text-primary">
-                    {totalCost > 0 ? `$${totalCost.toFixed(2)}` : '...'}
-                  </div>
-                </div>
+                )}
               </div>
             )}
 

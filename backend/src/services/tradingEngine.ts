@@ -30,6 +30,8 @@ const MAX_POSITION_PERCENT = 30;
 
 let engineTimer: NodeJS.Timeout | null = null;
 let isRunning = false;
+let lastCycleTime: Date | null = null;
+let currentIntervalMinutes = 15;
 
 // ── Engine Control ──
 
@@ -59,6 +61,7 @@ async function startEngine(): Promise<void> {
   }
 
   const intervalMs = settings.tradingIntervalMinutes * 60 * 1000;
+  currentIntervalMinutes = settings.tradingIntervalMinutes;
 
   console.log(`Trading engine started. Interval: ${settings.tradingIntervalMinutes} min`);
 
@@ -139,6 +142,7 @@ function isMarketOpen(): boolean {
 async function runCycle(): Promise<void> {
   if (isRunning) return;
   isRunning = true;
+  lastCycleTime = new Date();
 
   try {
     const settings = await getSettings();
@@ -425,10 +429,37 @@ async function updatePortfolioPnl(context: MarketContext): Promise<void> {
   });
 }
 
+interface CycleStatus {
+  lastCycleTime: string | null;
+  nextCycleTime: string | null;
+  intervalMinutes: number;
+  secondsUntilNext: number;
+  isRunning: boolean;
+}
+
+function getCycleStatus(): CycleStatus {
+  const now = Date.now();
+  const nextTime = lastCycleTime
+    ? new Date(lastCycleTime.getTime() + currentIntervalMinutes * 60 * 1000)
+    : null;
+  const secondsUntilNext = nextTime
+    ? Math.max(0, Math.floor((nextTime.getTime() - now) / 1000))
+    : 0;
+
+  return {
+    lastCycleTime: lastCycleTime?.toISOString() ?? null,
+    nextCycleTime: nextTime?.toISOString() ?? null,
+    intervalMinutes: currentIntervalMinutes,
+    secondsUntilNext,
+    isRunning,
+  };
+}
+
 export {
   startEngine,
   stopEngine,
   pauseEngine,
   resumeEngine,
   runCycle,
+  getCycleStatus,
 };
