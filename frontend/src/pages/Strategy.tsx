@@ -175,6 +175,22 @@ function Strategy(): ReactElement {
     return () => clearInterval(interval);
   }, [loadData]);
 
+  // Countdown
+  const [countdown, setCountdown] = useState(0);
+  useEffect(() => {
+    async function fetchCycle(): Promise<void> {
+      try {
+        const res = await authFetch('/engine/cycle-status');
+        const data = await res.json();
+        if (data.data) setCountdown(data.data.secondsUntilNext);
+      } catch { /* skip */ }
+    }
+    fetchCycle();
+    const sync = setInterval(fetchCycle, 10000);
+    const tick = setInterval(() => setCountdown((p) => Math.max(0, p - 1)), 1000);
+    return () => { clearInterval(sync); clearInterval(tick); };
+  }, []);
+
   if (isLoading) return <LoadingSpinner size="lg" message="Loading strategy..." />;
 
   const totalRecs = shortCount + longCount;
@@ -188,7 +204,22 @@ function Strategy(): ReactElement {
       {/* Planned Allocation Pie Chart */}
       {recommendations.length > 0 && (
         <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-4">Planned Allocation</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-text-muted dark:text-dark-text-muted uppercase tracking-wider">Planned Allocation</h2>
+            {countdown > 0 ? (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-tertiary dark:bg-dark-surface-tertiary">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                <span className="text-xs font-mono font-semibold text-text-primary dark:text-dark-text-primary">
+                  Next cycle: {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+                <span className="text-xs font-semibold text-primary">Analyzing...</span>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Pie Chart */}
             <div className="h-64">
@@ -267,7 +298,7 @@ function Strategy(): ReactElement {
                         {stockPrice > 0 ? `$${stockPrice.toFixed(2)}` : '...'}
                       </span>
                       <span className="text-right text-text-primary dark:text-dark-text-primary font-medium">
-                        {cost > 0 ? `$${cost.toFixed(2)}` : 'Watch'}
+                        {rec.quantity === 0 ? 'Watch' : cost > 0 ? `$${cost.toFixed(2)}` : '...'}
                       </span>
                       <span className="text-right text-text-muted dark:text-dark-text-muted">
                         {isLong ? 'Hold' : rec.confidence >= 70 ? '+20%' : '+10%'}
