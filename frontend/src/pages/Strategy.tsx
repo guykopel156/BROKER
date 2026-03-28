@@ -372,16 +372,26 @@ function Strategy(): ReactElement {
               <p className="text-sm text-text-muted dark:text-dark-text-muted">Waiting for next analysis cycle...</p>
             ) : (
               <div className="flex flex-col gap-4">
-                {recommendations.map((rec) => {
+                {[...recommendations].sort((a, b) => {
+                  if (a.quantity > 0 && b.quantity === 0) return -1;
+                  if (a.quantity === 0 && b.quantity > 0) return 1;
+                  return b.confidence - a.confidence;
+                }).map((rec) => {
                   const isLong = rec.holdType === 'long' || rec.strategy?.toLowerCase().startsWith('long');
+                  const isWatch = rec.quantity === 0;
                   return (
-                    <div key={rec._id} className="p-4 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
+                    <div key={rec._id} className={`p-4 rounded-lg ${isWatch ? 'bg-dark-surface-tertiary/50 dark:bg-dark-surface/50 opacity-70 border border-dashed border-dark-border' : 'bg-surface-secondary dark:bg-dark-surface-tertiary'}`}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Badge variant={rec.action === 'BUY' ? 'buy' : rec.action === 'SELL' ? 'sell' : 'pending'}>
                             {rec.action}
                           </Badge>
-                          <span className="text-lg font-bold text-text-primary dark:text-dark-text-primary">{rec.symbol}</span>
+                          <span className={`text-lg font-bold ${isWatch ? 'text-text-muted dark:text-dark-text-muted' : 'text-text-primary dark:text-dark-text-primary'}`}>{rec.symbol}</span>
+                          {isWatch && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-dark-border/50 text-text-muted dark:text-dark-text-muted">
+                              WATCHLIST
+                            </span>
+                          )}
                           <span className={`px-1.5 py-0.5 text-[9px] font-bold uppercase rounded ${
                             isLong ? 'bg-profit/20 text-profit' : 'bg-warning/20 text-warning'
                           }`}>
@@ -474,7 +484,11 @@ function Strategy(): ReactElement {
               <p className="text-sm text-text-muted dark:text-dark-text-muted">No outlook yet</p>
             ) : (
               <div className="flex flex-col gap-3">
-                {recommendations.map((rec) => {
+                {[...recommendations].sort((a, b) => {
+                  if (a.quantity > 0 && b.quantity === 0) return -1;
+                  if (a.quantity === 0 && b.quantity > 0) return 1;
+                  return b.confidence - a.confidence;
+                }).map((rec) => {
                   return (
                     <button
                       key={`outlook-${rec._id}`}
