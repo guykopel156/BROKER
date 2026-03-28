@@ -74,6 +74,37 @@ export async function fetchAuditLogs(limit: number = 50): Promise<AuditLogEntry[
   return response.data.data;
 }
 
+// ── Trades ──
+
+export interface TradeData {
+  _id: string;
+  symbol: string;
+  action: 'BUY' | 'SELL';
+  quantity: number;
+  price: number;
+  totalValue: number;
+  reasoning: string;
+  status: 'pending' | 'filled' | 'failed' | 'in-progress';
+  strategy: string;
+  exchange: string;
+  profitLoss?: number;
+  outcomeLabel?: string;
+  executedAt: string;
+}
+
+export async function fetchRecentTrades(limit: number = 20): Promise<TradeData[]> {
+  const response = await api.get(`/trades/recent?limit=${limit}`);
+  return response.data.data;
+}
+
+export async function fetchAllTrades(symbol?: string, action?: string): Promise<TradeData[]> {
+  const params = new URLSearchParams();
+  if (symbol) params.set('symbol', symbol);
+  if (action && action !== 'ALL') params.set('action', action);
+  const response = await api.get(`/trades?${params.toString()}`);
+  return response.data.data;
+}
+
 // ── Health ──
 
 export async function fetchHealth(): Promise<{ status: string }> {

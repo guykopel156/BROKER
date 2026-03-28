@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
 
 import { PositionsSummary, OpenPositionsTable, ClosedPositionsTable } from '../components/positions';
-import { MOCK_OPEN_POSITIONS, MOCK_CLOSED_POSITIONS } from '../mocks/positionsData';
+import { LoadingSpinner } from '../components/common';
 import { fetchPositions } from '../services/api';
 
 import type { Position } from '../types';
@@ -16,15 +16,16 @@ interface IbkrPosition {
 }
 
 function Positions(): ReactElement {
-  const [openPositions, setOpenPositions] = useState<Position[]>(MOCK_OPEN_POSITIONS);
-  const [closedPositions] = useState<ClosedPosition[]>(MOCK_CLOSED_POSITIONS);
+  const [openPositions, setOpenPositions] = useState<Position[]>([]);
+  const [closedPositions] = useState<ClosedPosition[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
 
   const loadLiveData = useCallback(async (): Promise<void> => {
     try {
       const positions = await fetchPositions() as IbkrPosition[];
 
-      if (Array.isArray(positions) && positions.length > 0) {
+      if (Array.isArray(positions)) {
         const mapped: Position[] = positions.map((p) => ({
           symbol: p.ticker,
           shares: p.position,
@@ -39,7 +40,9 @@ function Positions(): ReactElement {
         setIsLive(true);
       }
     } catch {
-      // Keep mock data
+      // Backend unreachable
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -48,6 +51,10 @@ function Positions(): ReactElement {
     const interval = setInterval(loadLiveData, 30000);
     return () => clearInterval(interval);
   }, [loadLiveData]);
+
+  if (isLoading) {
+    return <LoadingSpinner size="lg" message="Loading positions..." />;
+  }
 
   return (
     <div className="flex flex-col gap-6">
