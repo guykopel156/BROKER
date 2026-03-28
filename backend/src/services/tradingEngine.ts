@@ -4,7 +4,7 @@ import ibkrService from './ibkrService';
 import claudeService from './claudeService';
 import marketDataService from './marketDataService';
 import { createAuditLog } from './auditLogService';
-import { sendTradeAlert, sendRecommendationAlert } from './whatsappService';
+// WhatsApp alerts removed — now only sends at market open/close via scheduler
 import {
   emitTradeNew,
   emitPnlUpdate,
@@ -215,13 +215,7 @@ async function runCycle(): Promise<void> {
       }
     }
 
-    // Send WhatsApp recommendation alert
-    const newRecs = affordableDecisions.filter((d) => d.action !== 'HOLD');
-    if (newRecs.length > 0) {
-      sendRecommendationAlert(newRecs).catch(() => {
-        console.error('WhatsApp recommendation alert failed');
-      });
-    }
+    // WhatsApp alerts handled by scheduler (market open/close only)
 
     // Only execute trades when market is open
     if (isMarketOpen()) {
@@ -415,11 +409,6 @@ async function executeTrade(decision: TradeDecision): Promise<void> {
       details: `${decision.action} ${decision.quantity} ${decision.symbol}. Order ID: ${orderResult.orderId}`,
       tradeId: trade.id as string,
       metadata: { orderId: orderResult.orderId, reasoning: decision.reasoning },
-    });
-
-    // WhatsApp alert
-    sendTradeAlert(decision.action, decision.symbol, decision.quantity, decision.reasoning).catch(() => {
-      console.error('WhatsApp trade alert failed');
     });
 
   } catch (error) {
