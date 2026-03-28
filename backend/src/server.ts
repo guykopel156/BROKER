@@ -4,6 +4,7 @@ import http from 'http';
 
 import config from './config';
 import connectDatabase from './config/database';
+import { initializeSocket } from './services/socketService';
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +18,7 @@ app.get('/api/health', (_req, res) => {
 
 async function start(): Promise<void> {
   await connectDatabase();
+  initializeSocket(server);
   server.listen(config.port, () => {
     console.log(`Server running on port ${config.port}`);
   });
