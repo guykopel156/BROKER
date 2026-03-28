@@ -1,13 +1,23 @@
 import React, { useState, useCallback, type ReactElement } from 'react';
 
 import Button from '../common/Button';
+import { useToast } from '../../context/ToastContext';
 
 function KillSwitch(): ReactElement {
   const [isPaused, setIsPaused] = useState(false);
+  const { showToast } = useToast();
 
   const handleToggle = useCallback((): void => {
-    setIsPaused((prev) => !prev);
-  }, []);
+    setIsPaused((prev) => {
+      const nextState = !prev;
+      if (nextState) {
+        showToast('Claude trading has been paused', 'warning');
+      } else {
+        showToast('Claude trading has been resumed', 'success');
+      }
+      return nextState;
+    });
+  }, [showToast]);
 
   return (
     <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-xl border ${

@@ -4,3 +4,4 @@ export { default as RecentTrades } from './RecentTrades';
 export { default as EquityCurve } from './EquityCurve';
 export { default as EngineHealth } from './EngineHealth';
 export { default as Watchlist } from './Watchlist';
+export { default as AlertHistory } from './AlertHistory';
