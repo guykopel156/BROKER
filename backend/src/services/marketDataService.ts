@@ -77,15 +77,76 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+interface GroupedStockData {
+  T: string;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+interface GroupedResponse {
+  results: GroupedStockData[];
+}
+
+// Cache for grouped daily data (all stocks in one call)
+let groupedCache: { data: GroupedStockData[]; expiresAt: number } | null = null;
+const GROUPED_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
 class MarketDataService {
   private client: AxiosInstance;
 
   constructor() {
     this.client = axios.create({
       baseURL: POLYGON_BASE_URL,
-      timeout: 10000,
+      timeout: 15000,
       params: { apiKey: config.polygonApiKey },
     });
+  }
+
+  // ── All Stocks (single API call) ──
+
+  async getAllStocks(): Promise<GroupedStockData[]> {
+    if (groupedCache && groupedCache.expiresAt > Date.now()) {
+      return groupedCache.data;
+    }
+
+    this.validateApiKey();
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    // Skip weekends
+    if (yesterday.getDay() === 0) yesterday.setDate(yesterday.getDate() - 2);
+    if (yesterday.getDay() === 6) yesterday.setDate(yesterday.getDate() - 1);
+    const dateStr = yesterday.toISOString().split('T')[0];
+
+    const response = await this.request<GroupedResponse>(
+      `/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true`
+    );
+
+    const results = response.results ?? [];
+    groupedCache = { data: results, expiresAt: Date.now() + GROUPED_CACHE_TTL_MS };
+    return results;
+  }
+
+  async getTopMovers(limit: number = 20): Promise<StockData[]> {
+    const all = await this.getAllStocks();
+    // Sort by volume, filter out penny stocks with no volume
+    const sorted = all
+      .filter((s) => s.v > 100000 && s.c > 0.01)
+      .sort((a, b) => b.v - a.v)
+      .slice(0, limit);
+
+    return sorted.map((s) => ({
+      symbol: s.T,
+      price: s.c,
+      open: s.o,
+      high: s.h,
+      low: s.l,
+      volume: s.v,
+      changePercent: s.o > 0 ? ((s.c - s.o) / s.o) * 100 : 0,
+    }));
   }
 
   // ── Stock Prices (free tier: previous close) ──

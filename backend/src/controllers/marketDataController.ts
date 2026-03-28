@@ -147,4 +147,10 @@ async function getStockDetails(req: Request, res: Response): Promise<void> {
   res.json({ data: details });
 }
 
-export { getStockCandles, getStockPrice, getStockDetails };
+async function getTopMovers(req: Request, res: Response): Promise<void> {
+  const limit = Number(req.query.limit) || 20;
+  const data = await marketDataService.getTopMovers(limit);
+  res.json({ data });
+}
+
+export { getStockCandles, getStockPrice, getStockDetails, getTopMovers };

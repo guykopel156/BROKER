@@ -6,7 +6,7 @@ interface TickerItem {
   changePercent: number;
 }
 
-const TICKER_SYMBOLS = ['SPY', 'QQQ', 'NVDA'];
+// No hardcoded list — fetches top movers from all US stocks
 
 function isMarketOpen(): boolean {
   const now = new Date();
@@ -42,31 +42,20 @@ function MarketStatusBar(): ReactElement {
 
   const fetchTickers = useCallback(async (): Promise<void> => {
     try {
-      const results: TickerItem[] = [];
+      const token = localStorage.getItem('broker-token');
+      const response = await fetch(
+        'http://localhost:4000/api/market/top-movers?limit=30',
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      const data = await response.json();
 
-      for (const symbol of TICKER_SYMBOLS) {
-        try {
-          const token = localStorage.getItem('broker-token');
-          const response = await fetch(
-            `http://localhost:4000/api/market/${symbol}/price`,
-            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-          );
-          const data = await response.json();
-          const result = data.data;
-
-          if (result) {
-            results.push({
-              symbol,
-              price: result.price,
-              changePercent: result.changePercent ?? 0,
-            });
-          }
-        } catch {
-          // Skip failed tickers
-        }
+      if (data.data && Array.isArray(data.data)) {
+        setTickers(data.data.map((s: { symbol: string; price: number; changePercent: number }) => ({
+          symbol: s.symbol,
+          price: s.price,
+          changePercent: s.changePercent,
+        })));
       }
-
-      setTickers(results);
     } catch {
       // Keep empty
     }
