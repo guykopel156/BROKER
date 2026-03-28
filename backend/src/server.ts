@@ -6,6 +6,7 @@ import config from './config';
 import connectDatabase from './config/database';
 import { initializeSocket } from './services/socketService';
 import { errorHandler } from './middleware';
+import routes from './routes';
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +17,8 @@ app.use(express.json());
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.use('/api', routes);
 
 // Error handler must be last middleware
 app.use(errorHandler);
