@@ -1,5 +1,49 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand Colors */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-light: #dbeafe;
+
+  /* P&L Colors */
+  --color-profit: #22c55e;
+  --color-profit-light: #dcfce7;
+  --color-loss: #ef4444;
+  --color-loss-light: #fee2e2;
+
+  /* Neutral / UI Colors */
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f8fafc;
+  --color-surface-tertiary: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* Dark Mode Colors */
+  --color-dark-surface: #0f172a;
+  --color-dark-surface-secondary: #1e293b;
+  --color-dark-surface-tertiary: #334155;
+  --color-dark-border: #334155;
+  --color-dark-text-primary: #f1f5f9;
+  --color-dark-text-secondary: #94a3b8;
+  --color-dark-text-muted: #64748b;
+
+  /* Status Colors */
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-info: #3b82f6;
+  --color-info-light: #dbeafe;
+
+  /* Sidebar */
+  --color-sidebar: #1e293b;
+  --color-sidebar-hover: #334155;
+  --color-sidebar-active: #3b82f6;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -11,4 +55,9 @@ body {
     'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  @apply bg-surface text-text-primary;
+}
+
+.dark body {
+  @apply bg-dark-surface text-dark-text-primary;
 }
