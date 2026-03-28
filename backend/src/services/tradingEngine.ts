@@ -14,10 +14,19 @@ import {
 import type { ISettings } from '../models';
 import type { MarketContext, TradeDecision } from '../types/claude';
 
-const DEFAULT_WATCHLIST = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META', 'JPM', 'V', 'SPY'];
-const MIN_CASH_RESERVE_PERCENT = 20;
-const MAX_OPEN_POSITIONS = 5;
-const MAX_POSITION_PERCENT = 8;
+const DEFAULT_WATCHLIST = [
+  // Large caps
+  'AAPL', 'MSFT', 'NVDA', 'TSLA', 'META',
+  // Mid/small caps with growth potential
+  'SOFI', 'PLTR', 'NIO', 'RIVN', 'LCID',
+  // Low-price / penny stocks
+  'SNDL', 'TELL', 'BBIG', 'MULN', 'XELA',
+  // ETFs
+  'SPY', 'QQQ',
+];
+const MIN_CASH_RESERVE_PERCENT = 5;
+const MAX_OPEN_POSITIONS = 10;
+const MAX_POSITION_PERCENT = 30;
 
 let engineTimer: NodeJS.Timeout | null = null;
 let isRunning = false;
