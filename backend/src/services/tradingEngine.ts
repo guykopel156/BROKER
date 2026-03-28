@@ -1,3 +1,4 @@
+import config from '../config';
 import { Settings, Trade } from '../models';
 import ibkrService from './ibkrService';
 import claudeService from './claudeService';
@@ -25,6 +26,21 @@ let isRunning = false;
 
 async function startEngine(): Promise<void> {
   if (engineTimer) return;
+
+  if (!config.ibkrAccountId) {
+    console.log('Trading engine skipped: IBKR_ACCOUNT_ID not configured.');
+    return;
+  }
+
+  if (!config.anthropicApiKey) {
+    console.log('Trading engine skipped: ANTHROPIC_API_KEY not configured.');
+    return;
+  }
+
+  if (!config.polygonApiKey) {
+    console.log('Trading engine skipped: POLYGON_API_KEY not configured.');
+    return;
+  }
 
   const settings = await getSettings();
 
