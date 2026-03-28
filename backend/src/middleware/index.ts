@@ -1,1 +1,2 @@
-// Express middleware (error handling, validation, async wrapper)
+export { default as asyncWrapper } from './asyncWrapper';
+export { default as errorHandler } from './errorHandler';

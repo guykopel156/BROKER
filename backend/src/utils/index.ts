@@ -1,1 +1,1 @@
-// Utility functions and helpers
+export { default as AppError } from './AppError';

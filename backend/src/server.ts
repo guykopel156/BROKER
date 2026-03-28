@@ -5,6 +5,7 @@ import http from 'http';
 import config from './config';
 import connectDatabase from './config/database';
 import { initializeSocket } from './services/socketService';
+import { errorHandler } from './middleware';
 
 const app = express();
 const server = http.createServer(app);
@@ -15,6 +16,9 @@ app.use(express.json());
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Error handler must be last middleware
+app.use(errorHandler);
 
 async function start(): Promise<void> {
   await connectDatabase();
