@@ -6,28 +6,20 @@ import { AppError } from '../utils';
 import type { StockData, NewsItem } from '../types/claude';
 
 const POLYGON_BASE_URL = 'https://api.polygon.io';
+const API_DELAY_MS = 250;
 
-interface PolygonTickerSnapshot {
-  ticker: string;
-  day: {
-    o: number;
-    h: number;
-    l: number;
-    c: number;
-    v: number;
-    vw: number;
-  };
-  todaysChange: number;
-  todaysChangePerc: number;
-  updated: number;
+interface PolygonPrevCloseResult {
+  T: string;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+  vw: number;
 }
 
-interface PolygonSnapshotResponse {
-  tickers: PolygonTickerSnapshot[];
-}
-
-interface PolygonSingleSnapshotResponse {
-  ticker: PolygonTickerSnapshot;
+interface PolygonPrevCloseResponse {
+  results: PolygonPrevCloseResult[];
 }
 
 interface PolygonAggBar {
@@ -81,6 +73,10 @@ interface PolygonNewsResponse {
   results: PolygonNewsArticle[];
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 class MarketDataService {
   private client: AxiosInstance;
 
@@ -92,28 +88,45 @@ class MarketDataService {
     });
   }
 
-  // ── Stock Prices ──
+  // ── Stock Prices (free tier: previous close) ──
 
-  async getStockSnapshot(symbol: string): Promise<StockData> {
+  async getStockPrice(symbol: string): Promise<StockData> {
     this.validateApiKey();
 
-    const response = await this.request<PolygonSingleSnapshotResponse>(
-      `/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}`
+    const response = await this.request<PolygonPrevCloseResponse>(
+      `/v2/aggs/ticker/${symbol}/prev?adjusted=true`
     );
 
-    const ticker = response.ticker;
-    return this.mapTickerToStockData(ticker);
+    const result = response.results?.[0];
+    if (!result) {
+      throw new AppError(404, 'STOCK_NOT_FOUND', `No data found for ${symbol}`);
+    }
+
+    return {
+      symbol,
+      price: result.c,
+      open: result.o,
+      high: result.h,
+      low: result.l,
+      volume: result.v,
+      changePercent: result.o > 0 ? ((result.c - result.o) / result.o) * 100 : 0,
+    };
   }
 
-  async getMultipleSnapshots(symbols: string[]): Promise<StockData[]> {
-    this.validateApiKey();
+  async getMultipleStockPrices(symbols: string[]): Promise<StockData[]> {
+    const results: StockData[] = [];
 
-    const tickers = symbols.join(',');
-    const response = await this.request<PolygonSnapshotResponse>(
-      `/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickers}`
-    );
+    for (const symbol of symbols) {
+      try {
+        const data = await this.getStockPrice(symbol);
+        results.push(data);
+        await delay(API_DELAY_MS);
+      } catch {
+        // Skip stocks that fail
+      }
+    }
 
-    return response.tickers.map((t) => this.mapTickerToStockData(t));
+    return results;
   }
 
   // ── Candles (OHLCV) ──
@@ -195,42 +208,48 @@ class MarketDataService {
 
     let url = `/v2/reference/news?limit=${limit}&order=desc&sort=published_utc`;
     if (symbols && symbols.length > 0) {
-      url += `&ticker=${symbols.join(',')}`;
+      url += `&ticker=${symbols[0]}`;
     }
 
-    const response = await this.request<PolygonNewsResponse>(url);
+    try {
+      const response = await this.request<PolygonNewsResponse>(url);
 
-    return (response.results ?? []).map((article) => ({
-      title: article.title,
-      source: article.publisher.name,
-      symbol: article.tickers[0],
-      publishedAt: article.published_utc,
-    }));
+      return (response.results ?? []).map((article) => ({
+        title: article.title,
+        source: article.publisher.name,
+        symbol: article.tickers?.[0],
+        publishedAt: article.published_utc,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   // ── Full Context Builder ──
 
   async getFullStockData(symbols: string[]): Promise<StockData[]> {
-    const snapshots = await this.getMultipleSnapshots(symbols);
+    const stockPrices = await this.getMultipleStockPrices(symbols);
 
-    const enriched = await Promise.all(
-      snapshots.map(async (stock) => {
-        const [rsi, macd, sma20, sma50] = await Promise.all([
-          this.getRsi(stock.symbol),
-          this.getMacd(stock.symbol),
-          this.getSma(stock.symbol, 20),
-          this.getSma(stock.symbol, 50),
-        ]);
+    const enriched: StockData[] = [];
 
-        return {
-          ...stock,
-          rsi,
-          macd: macd?.value,
-          movingAvg20: sma20,
-          movingAvg50: sma50,
-        };
-      })
-    );
+    for (const stock of stockPrices) {
+      await delay(API_DELAY_MS);
+
+      const [rsi, macd, sma20, sma50] = await Promise.all([
+        this.getRsi(stock.symbol),
+        this.getMacd(stock.symbol),
+        this.getSma(stock.symbol, 20),
+        this.getSma(stock.symbol, 50),
+      ]);
+
+      enriched.push({
+        ...stock,
+        rsi,
+        macd: macd?.value,
+        movingAvg20: sma20,
+        movingAvg50: sma50,
+      });
+    }
 
     return enriched;
   }
@@ -243,18 +262,6 @@ class MarketDataService {
     }
   }
 
-  private mapTickerToStockData(ticker: PolygonTickerSnapshot): StockData {
-    return {
-      symbol: ticker.ticker,
-      price: ticker.day.c,
-      open: ticker.day.o,
-      high: ticker.day.h,
-      low: ticker.day.l,
-      volume: ticker.day.v,
-      changePercent: ticker.todaysChangePerc,
-    };
-  }
-
   private async request<T>(path: string): Promise<T> {
     try {
       const response = await this.client.get<T>(path);
@@ -262,10 +269,14 @@ class MarketDataService {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status ?? 500;
-        const message = error.response?.data?.error ?? error.message;
+        const message = error.response?.data?.message ?? error.response?.data?.error ?? error.message;
 
         if (status === 403) {
-          throw new AppError(403, 'POLYGON_AUTH_FAILED', 'Polygon API key is invalid or rate limited');
+          throw new AppError(403, 'POLYGON_AUTH_FAILED', `Polygon API: ${message}`);
+        }
+
+        if (status === 429) {
+          throw new AppError(429, 'POLYGON_RATE_LIMITED', 'Polygon API rate limit reached. Free tier: 5 calls/min.');
         }
 
         throw new AppError(status, 'POLYGON_REQUEST_FAILED', `Polygon API error: ${message}`);
