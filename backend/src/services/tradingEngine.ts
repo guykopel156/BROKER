@@ -145,18 +145,30 @@ async function runCycle(): Promise<void> {
       claudeResponse: JSON.stringify(decisions),
     });
 
-    // Save all recommendations (including HOLD)
+    // Only save recommendation if it's different from the latest one
     const cycleTimestamp = new Date();
     for (const decision of decisions) {
-      await Recommendation.create({
-        action: decision.action,
+      const lastRec = await Recommendation.findOne({
         symbol: decision.symbol,
-        quantity: decision.quantity,
-        reasoning: decision.reasoning,
-        confidence: decision.confidence,
-        strategy: decision.strategy,
-        cycleTimestamp,
-      });
+        action: decision.action,
+      }).sort({ cycleTimestamp: -1 });
+
+      const isDuplicate = lastRec &&
+        lastRec.action === decision.action &&
+        lastRec.symbol === decision.symbol &&
+        lastRec.quantity === decision.quantity;
+
+      if (!isDuplicate) {
+        await Recommendation.create({
+          action: decision.action,
+          symbol: decision.symbol,
+          quantity: decision.quantity,
+          reasoning: decision.reasoning,
+          confidence: decision.confidence,
+          strategy: decision.strategy,
+          cycleTimestamp,
+        });
+      }
     }
 
     for (const decision of decisions) {
