@@ -15,23 +15,12 @@ interface MiniChartProps {
   symbol: string;
 }
 
-const POLYGON_API_KEY = 'FEpGsxnBj8cLyc2L0r_teFNX2t0vD_3K';
-
-function getDateRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 30);
-  return {
-    from: from.toISOString().split('T')[0],
-    to: to.toISOString().split('T')[0],
-  };
-}
-
 function MiniChart({ symbol }: MiniChartProps): ReactElement {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<IChartApi | null>(null);
   const { isDark } = useThemeContext();
   const [hasData, setHasData] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!chartRef.current || !symbol) return;
@@ -77,32 +66,23 @@ function MiniChart({ symbol }: MiniChartProps): ReactElement {
       wickDownColor: '#ef4444',
     });
 
-    const { from, to } = getDateRange();
-
-    fetch(
-      `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${from}/${to}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`
-    )
+    fetch(`http://localhost:4000/api/market/${symbol}/candles?days=30`)
       .then((res) => res.json())
-      .then((data) => {
-        const results = data.results;
-        if (!results || results.length === 0) {
+      .then((response) => {
+        const candles: CandleBar[] = response.data;
+        if (!candles || candles.length === 0) {
           setHasData(false);
+          setIsLoading(false);
           return;
         }
 
-        const candles: CandleBar[] = results.map((bar: { t: number; o: number; h: number; l: number; c: number }) => ({
-          time: new Date(bar.t).toISOString().split('T')[0],
-          open: bar.o,
-          high: bar.h,
-          low: bar.l,
-          close: bar.c,
-        }));
-
         series.setData(candles as never[]);
         chart.timeScale().fitContent();
+        setIsLoading(false);
       })
       .catch(() => {
         setHasData(false);
+        setIsLoading(false);
       });
 
     const handleResize = (): void => {
@@ -123,7 +103,15 @@ function MiniChart({ symbol }: MiniChartProps): ReactElement {
   if (!hasData) {
     return (
       <div className="h-[150px] flex items-center justify-center text-xs text-text-muted dark:text-dark-text-muted">
-        No chart data for {symbol}
+        Chart temporarily unavailable (API rate limited)
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="h-[150px] flex items-center justify-center text-xs text-text-muted dark:text-dark-text-muted">
+        Loading chart...
       </div>
     );
   }

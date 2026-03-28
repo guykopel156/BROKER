@@ -47,16 +47,16 @@ function MarketStatusBar(): ReactElement {
       for (const symbol of TICKER_SYMBOLS) {
         try {
           const response = await fetch(
-            `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=FEpGsxnBj8cLyc2L0r_teFNX2t0vD_3K`
+            `http://localhost:4000/api/market/${symbol}/price`
           );
           const data = await response.json();
-          const result = data.results?.[0];
+          const result = data.data;
 
           if (result) {
             results.push({
               symbol,
-              price: result.c,
-              changePercent: result.o > 0 ? ((result.c - result.o) / result.o) * 100 : 0,
+              price: result.price,
+              changePercent: result.changePercent ?? 0,
             });
           }
         } catch {
