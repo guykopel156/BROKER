@@ -176,10 +176,21 @@ async function runCycle(): Promise<void> {
     const totalBudget = context.portfolio.totalValue;
     const spendableBudget = totalBudget * 0.95; // 5% reserve
 
-    // Sort: SELL first, then BUY by confidence (highest first)
+    // Sort: SELL first, then SHORT by quick-profit potential, then LONG by confidence
     const sorted = [...decisions].sort((a, b) => {
+      // SELL always first
       if (a.action === 'SELL' && b.action !== 'SELL') return -1;
       if (a.action !== 'SELL' && b.action === 'SELL') return 1;
+
+      const aIsShort = a.strategy.toLowerCase().startsWith('short');
+      const bIsShort = b.strategy.toLowerCase().startsWith('short');
+
+      // Short-term: prioritize highest confidence (fastest profit)
+      // Long-term: goes after short-term
+      if (aIsShort && !bIsShort) return -1;
+      if (!aIsShort && bIsShort) return 1;
+
+      // Within same type: highest confidence first
       return b.confidence - a.confidence;
     });
 
