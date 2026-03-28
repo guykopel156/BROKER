@@ -10,6 +10,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/' },
+  { label: 'My Stocks', path: '/my-stocks' },
   { label: 'Trade Log', path: '/trade-log' },
   { label: 'Positions', path: '/positions' },
   { label: 'Charts', path: '/charts' },
