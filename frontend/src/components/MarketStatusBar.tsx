@@ -6,7 +6,7 @@ interface TickerItem {
   changePercent: number;
 }
 
-const TICKER_SYMBOLS = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'META', 'AMZN', 'GOOGL', 'JPM'];
+const TICKER_SYMBOLS = ['SPY', 'QQQ', 'NVDA'];
 
 function isMarketOpen(): boolean {
   const now = new Date();
@@ -77,7 +77,7 @@ function MarketStatusBar(): ReactElement {
 
   useEffect(() => {
     fetchTickers();
-    const interval = setInterval(fetchTickers, 120000);
+    const interval = setInterval(fetchTickers, 300000);
     return () => clearInterval(interval);
   }, [fetchTickers]);
 
