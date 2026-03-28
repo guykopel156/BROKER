@@ -21,6 +21,18 @@ import type { PortfolioSummary, Trade, EquityPoint, EngineHealthData, WatchlistI
 import type { AlertItem } from '../mocks/alertsData';
 import type { TradeData } from '../services/api';
 
+type AlertType = 'trade' | 'loss-limit' | 'engine-paused' | 'error';
+
+function mapAuditAction(action: string): AlertType {
+  if (action.includes('TRADE_EXECUTED') || action.includes('TRADE_REJECTED')) return 'trade';
+  if (action.includes('TRADE_FAILED')) return 'error';
+  if (action.includes('LOSS')) return 'loss-limit';
+  if (action.includes('ENGINE') || action.includes('PAUSE') || action.includes('RESUME')) return 'engine-paused';
+  if (action.includes('CYCLE_START') || action.includes('CLAUDE_RESPONSE')) return 'trade';
+  if (action.includes('ERROR')) return 'error';
+  return 'engine-paused';
+}
+
 const EMPTY_PORTFOLIO: PortfolioSummary = {
   totalValue: 0,
   todayPnl: 0,
@@ -99,10 +111,7 @@ function Dashboard(): ReactElement {
       const logs = await fetchAuditLogs(20);
       setAlerts(logs.map((log) => ({
         id: log._id,
-        type: log.action.includes('TRADE') ? 'trade' as const
-          : log.action.includes('LOSS') ? 'loss-limit' as const
-          : log.action.includes('ENGINE') ? 'engine-paused' as const
-          : 'error' as const,
+        type: mapAuditAction(log.action),
         message: log.details,
         timestamp: new Date(log.createdAt).toLocaleString(),
       })));
