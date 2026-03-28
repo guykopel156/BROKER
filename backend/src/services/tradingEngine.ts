@@ -183,10 +183,10 @@ async function runCycle(): Promise<void> {
       claudeResponse: JSON.stringify(decisions),
     });
 
-    // Hard budget enforcer: total portfolio value
+    // Hard budget enforcer: allocate proportionally by confidence
     const availableCash = context.portfolio.availableCash;
     const totalBudget = context.portfolio.totalValue;
-    let remainingBudget = totalBudget * 0.95; // 5% reserve
+    const spendableBudget = totalBudget * 0.95; // 5% reserve
 
     // Sort: SELL first, then BUY by confidence (highest first)
     const sorted = [...decisions].sort((a, b) => {
@@ -195,12 +195,22 @@ async function runCycle(): Promise<void> {
       return b.confidence - a.confidence;
     });
 
-    // Enforce budget: recalculate quantities so total doesn't exceed portfolio value
+    // Calculate confidence-weighted budget allocation
+    const buyDecisions = sorted.filter((d) => d.action === 'BUY' && d.quantity > 0);
+    const totalConfidence = buyDecisions.reduce((sum, d) => sum + d.confidence, 0);
+
+    let remainingBudget = spendableBudget;
     for (const decision of sorted) {
       if (decision.action === 'BUY' && decision.quantity > 0) {
+        // Allocate budget proportionally by confidence
+        const share = totalConfidence > 0 ? decision.confidence / totalConfidence : 1 / buyDecisions.length;
+        const allocatedBudget = Math.min(spendableBudget * share, remainingBudget);
+
         const stockPrice = getStockPrice(decision.symbol, context);
         if (stockPrice && stockPrice > 0) {
-          const maxAffordable = Math.floor(remainingBudget / stockPrice);
+          const maxFromBudget = Math.floor(allocatedBudget / stockPrice);
+          const maxFromRemaining = Math.floor(remainingBudget / stockPrice);
+          const maxAffordable = Math.min(maxFromBudget, maxFromRemaining);
           if (maxAffordable <= 0) {
             decision.quantity = 0; // Can't afford — watchlist only
           } else {
