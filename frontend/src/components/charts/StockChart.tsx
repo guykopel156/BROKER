@@ -67,19 +67,6 @@ function StockChart({ symbol, candles, entryPrice, markers }: StockChartProps): 
       title: `Entry: $${entryPrice}`,
     });
 
-    // Trade markers
-    if (markers.length > 0) {
-      (series as any).setMarkers(
-        markers.map((m) => ({
-          time: m.time,
-          position: m.position,
-          color: m.color,
-          shape: m.shape,
-          text: m.text,
-        }))
-      );
-    }
-
     chart.timeScale().fitContent();
 
     const handleResize = (): void => {
