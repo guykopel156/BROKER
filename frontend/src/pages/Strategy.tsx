@@ -38,6 +38,8 @@ function Strategy(): ReactElement {
   const [positions, setPositions] = useState<PositionWithSignal[]>([]);
   const [news, setNews] = useState<StockNews[]>([]);
   const [prices, setPrices] = useState<Record<string, number>>({});
+  const [stockDetails, setStockDetails] = useState<Record<string, { name: string; description: string; sector: string; marketCap: number }>>({});
+  const [selectedOutlook, setSelectedOutlook] = useState<RecommendationData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [shortCount, setShortCount] = useState(0);
   const [longCount, setLongCount] = useState(0);
@@ -67,6 +69,26 @@ function Strategy(): ReactElement {
         }
       }
       setPrices(priceMap);
+
+      // Fetch stock details
+      const detailsMap: Record<string, { name: string; description: string; sector: string; marketCap: number }> = {};
+      for (const rec of recs) {
+        if (rec.symbol && !detailsMap[rec.symbol]) {
+          try {
+            const detailRes = await authFetch(`/market/${rec.symbol}/details`);
+            const detailData = await detailRes.json();
+            if (detailData.data) {
+              detailsMap[rec.symbol] = {
+                name: detailData.data.name ?? rec.symbol,
+                description: detailData.data.description ?? '',
+                sector: detailData.data.sector ?? '',
+                marketCap: detailData.data.marketCap ?? 0,
+              };
+            }
+          } catch { /* skip */ }
+        }
+      }
+      setStockDetails(detailsMap);
 
       // Positions
       try {
@@ -418,29 +440,133 @@ function Strategy(): ReactElement {
               <div className="flex flex-col gap-3">
                 {recommendations.map((rec) => {
                   return (
-                    <div key={`outlook-${rec._id}`} className="p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary">
+                    <button
+                      key={`outlook-${rec._id}`}
+                      onClick={() => setSelectedOutlook(rec)}
+                      className="p-3 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary hover:bg-surface-tertiary dark:hover:bg-dark-border transition-colors text-left w-full"
+                    >
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-bold text-text-primary dark:text-dark-text-primary">{rec.symbol}</span>
                         <span className={`text-xs font-semibold ${rec.confidence >= 70 ? 'text-profit' : rec.confidence >= 40 ? 'text-warning' : 'text-loss'}`}>
-                          {rec.confidence}% confidence
+                          {rec.confidence}%
                         </span>
                       </div>
                       <p className="text-xs text-text-muted dark:text-dark-text-muted mb-1">
-                        {rec.reasoning.substring(0, 120)}...
+                        {rec.reasoning.substring(0, 80)}...
                       </p>
-                      <div className="flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <span key={star} className={`text-xs ${star <= Math.ceil(rec.confidence / 20) ? 'text-warning' : 'text-dark-border'}`}>
-                            ★
-                          </span>
-                        ))}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <span key={star} className={`text-xs ${star <= Math.ceil(rec.confidence / 20) ? 'text-warning' : 'text-dark-border'}`}>
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-primary">View details →</span>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             )}
           </div>
+
+          {/* Outlook Modal */}
+          {selectedOutlook && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedOutlook(null)} />
+              <div className="relative w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl shadow-xl">
+                <div className="sticky top-0 flex items-center justify-between px-5 py-4 border-b border-border dark:border-dark-border bg-surface dark:bg-dark-surface-secondary rounded-t-xl">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-bold text-text-primary dark:text-dark-text-primary">{selectedOutlook.symbol}</span>
+                      <Badge variant={selectedOutlook.action === 'BUY' ? 'buy' : selectedOutlook.action === 'SELL' ? 'sell' : 'pending'}>
+                        {selectedOutlook.action}
+                      </Badge>
+                    </div>
+                    {stockDetails[selectedOutlook.symbol] && (
+                      <p className="text-xs text-text-muted dark:text-dark-text-muted mt-0.5">
+                        {stockDetails[selectedOutlook.symbol].name}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => setSelectedOutlook(null)} className="text-text-muted dark:text-dark-text-muted hover:text-text-primary dark:hover:text-dark-text-primary">
+                    ✕
+                  </button>
+                </div>
+
+                <div className="px-5 py-4 space-y-4">
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-2 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary text-center">
+                      <span className="text-[10px] text-text-muted dark:text-dark-text-muted block">Confidence</span>
+                      <span className={`text-lg font-bold ${selectedOutlook.confidence >= 70 ? 'text-profit' : selectedOutlook.confidence >= 40 ? 'text-warning' : 'text-loss'}`}>
+                        {selectedOutlook.confidence}%
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary text-center">
+                      <span className="text-[10px] text-text-muted dark:text-dark-text-muted block">Shares</span>
+                      <span className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
+                        {selectedOutlook.quantity > 0 ? selectedOutlook.quantity : 'Watch'}
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-surface-secondary dark:bg-dark-surface-tertiary text-center">
+                      <span className="text-[10px] text-text-muted dark:text-dark-text-muted block">Price</span>
+                      <span className="text-lg font-bold text-text-primary dark:text-dark-text-primary">
+                        {prices[selectedOutlook.symbol] ? `$${prices[selectedOutlook.symbol].toFixed(2)}` : '...'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Strategy */}
+                  <div>
+                    <span className="text-xs font-semibold text-text-muted dark:text-dark-text-muted uppercase">Strategy</span>
+                    <p className="text-sm text-primary font-medium mt-1">{selectedOutlook.strategy}</p>
+                  </div>
+
+                  {/* Full Reasoning */}
+                  <div>
+                    <span className="text-xs font-semibold text-text-muted dark:text-dark-text-muted uppercase">Agent's Reasoning</span>
+                    <p className="text-sm text-text-secondary dark:text-dark-text-secondary mt-1 leading-relaxed">
+                      {selectedOutlook.reasoning}
+                    </p>
+                  </div>
+
+                  {/* Company Info */}
+                  {stockDetails[selectedOutlook.symbol] && (
+                    <div>
+                      <span className="text-xs font-semibold text-text-muted dark:text-dark-text-muted uppercase">Company Info</span>
+                      <div className="mt-1 space-y-1">
+                        <p className="text-sm font-medium text-text-primary dark:text-dark-text-primary">
+                          {stockDetails[selectedOutlook.symbol].name}
+                        </p>
+                        {stockDetails[selectedOutlook.symbol].sector && (
+                          <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                            Sector: {stockDetails[selectedOutlook.symbol].sector}
+                          </p>
+                        )}
+                        {stockDetails[selectedOutlook.symbol].marketCap > 0 && (
+                          <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                            Market Cap: ${(stockDetails[selectedOutlook.symbol].marketCap / 1000000000).toFixed(1)}B
+                          </p>
+                        )}
+                        {stockDetails[selectedOutlook.symbol].description && (
+                          <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-2 leading-relaxed">
+                            {stockDetails[selectedOutlook.symbol].description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Timestamp */}
+                  <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                    Analyzed: {new Date(selectedOutlook.cycleTimestamp).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* News Feed */}
           <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5">
