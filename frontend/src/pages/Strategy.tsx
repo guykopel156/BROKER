@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Badge, LoadingSpinner } from '../components/common';
 import MiniChart from '../components/dashboard/MiniChart';
@@ -145,6 +146,87 @@ function Strategy(): ReactElement {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-text-primary dark:text-dark-text-primary">Strategy & Outlook</h1>
+
+      {/* Planned Allocation Pie Chart */}
+      {recommendations.length > 0 && (
+        <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-4">Planned Allocation</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Pie Chart */}
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={recommendations.filter((r) => r.action === 'BUY').map((r) => ({
+                      name: r.symbol,
+                      value: r.quantity > 0 ? r.quantity : 1,
+                      shares: r.quantity,
+                      strategy: r.strategy,
+                    }))}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name }) => name}
+                  >
+                    {recommendations.filter((r) => r.action === 'BUY').map((_, index) => {
+                      const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+                      return <Cell key={index} fill={colors[index % colors.length]} />;
+                    })}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: '#f1f5f9',
+                    }}
+                    formatter={(_value, name) => [`${name}`, 'Stock']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Stock Details Table */}
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-5 gap-2 text-[10px] font-semibold text-text-muted dark:text-dark-text-muted uppercase pb-1 border-b border-border dark:border-dark-border">
+                <span>Stock</span>
+                <span>Type</span>
+                <span className="text-right">Shares</span>
+                <span className="text-right">Est. Cost</span>
+                <span className="text-right">Sell Target</span>
+              </div>
+              {recommendations.filter((r) => r.action === 'BUY').map((rec, index) => {
+                const isLong = rec.holdType === 'long' || rec.strategy?.toLowerCase().startsWith('long');
+                const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+                return (
+                  <div key={rec._id} className="grid grid-cols-5 gap-2 items-center py-1.5 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: colors[index % colors.length] }} />
+                      <span className="font-bold text-text-primary dark:text-dark-text-primary">{rec.symbol}</span>
+                    </div>
+                    <span className={`text-[10px] font-medium ${isLong ? 'text-profit' : 'text-warning'}`}>
+                      {isLong ? 'Long' : 'Short'}
+                    </span>
+                    <span className="text-right text-text-primary dark:text-dark-text-primary font-medium">
+                      {rec.quantity > 0 ? rec.quantity : '—'}
+                    </span>
+                    <span className="text-right text-text-secondary dark:text-dark-text-secondary">
+                      {rec.quantity > 0 ? `~$${(rec.quantity * 2).toFixed(0)}` : 'Watch'}
+                    </span>
+                    <span className="text-right text-text-muted dark:text-dark-text-muted">
+                      {isLong ? 'Hold' : rec.confidence >= 70 ? '+20%' : '+10%'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Portfolio Balance */}
       <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5">
