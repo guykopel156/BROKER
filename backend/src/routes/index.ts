@@ -11,6 +11,7 @@ import recommendationRoutes from './recommendationRoutes';
 import marketDataRoutes from './marketDataRoutes';
 import chatRoutes from './chatRoutes';
 import whatsappRoutes from './whatsappRoutes';
+import billingRoutes from './billingRoutes';
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use('/recommendations', authMiddleware, recommendationRoutes);
 router.use('/market', authMiddleware, marketDataRoutes);
 router.use('/chat', authMiddleware, chatRoutes);
 router.use('/whatsapp', authMiddleware, whatsappRoutes);
+router.use('/billing', authMiddleware, billingRoutes);
 
 export default router;

@@ -5,6 +5,22 @@ import { fetchSettings, updateSettings, authFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
+interface BillingService {
+  name: string;
+  description: string;
+  cost: number;
+  details: string;
+  plan: string;
+}
+
+interface BillingData {
+  month: string;
+  services: BillingService[];
+  total: number;
+  cyclesThisMonth: number;
+  recommendationsThisMonth: number;
+}
+
 const INTERVAL_OPTIONS = [
   { label: '5 min', value: 5 },
   { label: '15 min', value: 15 },
@@ -162,9 +178,25 @@ function Settings(): ReactElement {
     }
   }, [maxLossPercent, tradingInterval, strategyPrompt, isPaperTrading, showToast]);
 
+  const [billing, setBilling] = useState<BillingData | null>(null);
+
+  useEffect(() => {
+    async function loadBilling(): Promise<void> {
+      try {
+        const response = await authFetch('/billing');
+        const result = await response.json();
+        if (result.data) setBilling(result.data);
+      } catch { /* skip */ }
+    }
+    loadBilling();
+  }, []);
+
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
-      <h1 className="text-2xl font-bold text-text-primary dark:text-dark-text-primary">Settings</h1>
+    <div>
+      <h1 className="text-2xl font-bold text-text-primary dark:text-dark-text-primary mb-6">Settings</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Left column — Settings */}
+      <div className="lg:col-span-2 flex flex-col gap-6">
 
       {/* Connection Status */}
       <Card title="Connection Status">
@@ -355,6 +387,60 @@ function Settings(): ReactElement {
         <Button onClick={handleSave} isLoading={isSaving} size="lg">
           Save Settings
         </Button>
+      </div>
+      </div>
+
+      {/* Right column — Billing */}
+      <div className="flex flex-col gap-6">
+        <Card title={`Billing — ${billing?.month ?? 'Loading...'}`}>
+          {billing ? (
+            <div className="flex flex-col gap-3">
+              {billing.services.map((service) => (
+                <div key={service.name} className="flex flex-col gap-1 pb-3 border-b border-border dark:border-dark-border last:border-b-0 last:pb-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-text-primary dark:text-dark-text-primary">{service.name}</span>
+                    <span className={`text-sm font-bold ${service.cost > 0 ? 'text-warning' : 'text-profit'}`}>
+                      {service.cost > 0 ? `$${service.cost.toFixed(4)}` : 'Free'}
+                    </span>
+                  </div>
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted">{service.description}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-muted dark:text-dark-text-muted">{service.details}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-tertiary dark:bg-dark-surface-tertiary text-text-muted dark:text-dark-text-muted">
+                      {service.plan}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-3 border-t-2 border-border dark:border-dark-border">
+                <span className="text-sm font-bold text-text-primary dark:text-dark-text-primary">Monthly Total</span>
+                <span className="text-lg font-bold text-primary">
+                  ${billing.total.toFixed(4)}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted dark:text-dark-text-muted">Loading billing...</p>
+          )}
+        </Card>
+
+        <Card title="Usage This Month">
+          {billing ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Trading Cycles</span>
+                <span className="text-sm font-bold text-text-primary dark:text-dark-text-primary">{billing.cyclesThisMonth}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Recommendations</span>
+                <span className="text-sm font-bold text-text-primary dark:text-dark-text-primary">{billing.recommendationsThisMonth}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted dark:text-dark-text-muted">Loading...</p>
+          )}
+        </Card>
+      </div>
       </div>
 
       {/* Live Mode Confirmation Modal */}
