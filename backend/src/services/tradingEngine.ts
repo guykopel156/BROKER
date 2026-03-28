@@ -168,10 +168,36 @@ async function runCycle(): Promise<void> {
       claudeResponse: JSON.stringify(decisions),
     });
 
-    // Save ALL recommendations (including ones with 0 shares)
+    // Hard budget enforcer: total portfolio value
     const availableCash = context.portfolio.availableCash;
+    const totalBudget = context.portfolio.totalValue;
+    let remainingBudget = totalBudget * 0.95; // 5% reserve
+
+    // Sort: SELL first, then BUY by confidence (highest first)
+    const sorted = [...decisions].sort((a, b) => {
+      if (a.action === 'SELL' && b.action !== 'SELL') return -1;
+      if (a.action !== 'SELL' && b.action === 'SELL') return 1;
+      return b.confidence - a.confidence;
+    });
+
+    // Enforce budget: recalculate quantities so total doesn't exceed portfolio value
+    for (const decision of sorted) {
+      if (decision.action === 'BUY' && decision.quantity > 0) {
+        const stockPrice = getStockPrice(decision.symbol, context);
+        if (stockPrice && stockPrice > 0) {
+          const maxAffordable = Math.floor(remainingBudget / stockPrice);
+          if (maxAffordable <= 0) {
+            decision.quantity = 0; // Can't afford — watchlist only
+          } else {
+            decision.quantity = Math.min(decision.quantity, maxAffordable);
+            remainingBudget -= decision.quantity * stockPrice;
+          }
+        }
+      }
+    }
+
     const cycleTimestamp = new Date();
-    for (const decision of decisions) {
+    for (const decision of sorted) {
       const lastRec = await Recommendation.findOne({
         symbol: decision.symbol,
         action: decision.action,
