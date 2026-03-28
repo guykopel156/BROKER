@@ -50,7 +50,9 @@ function startDailyScheduler(): void {
     }
   }, 60000);
 
-  console.log('WhatsApp scheduler: sends at market open (16:30 IL) and close (23:00 IL), Mon-Fri');
+  console.log(
+    'WhatsApp scheduler: sends at market open (16:30 IL) and close (23:00 IL), Mon-Fri',
+  );
 }
 
 function stopDailyScheduler(): void {

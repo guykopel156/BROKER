@@ -183,28 +183,22 @@ async function runCycle(): Promise<void> {
       return b.confidence - a.confidence;
     });
 
-    // Calculate confidence-weighted budget allocation
-    const buyDecisions = sorted.filter((d) => d.action === 'BUY' && d.quantity > 0);
-    const totalConfidence = buyDecisions.reduce((sum, d) => sum + d.confidence, 0);
-
+    // Greedy allocation: highest confidence gets max shares, then next gets remaining
     let remainingBudget = spendableBudget;
     for (const decision of sorted) {
-      if (decision.action === 'BUY' && decision.quantity > 0) {
-        // Allocate budget proportionally by confidence
-        const share = totalConfidence > 0 ? decision.confidence / totalConfidence : 1 / buyDecisions.length;
-        const allocatedBudget = Math.min(spendableBudget * share, remainingBudget);
-
+      if (decision.action === 'BUY') {
         const stockPrice = getStockPrice(decision.symbol, context);
         if (stockPrice && stockPrice > 0) {
-          const maxFromBudget = Math.floor(allocatedBudget / stockPrice);
-          const maxFromRemaining = Math.floor(remainingBudget / stockPrice);
-          const maxAffordable = Math.min(maxFromBudget, maxFromRemaining);
+          const maxAffordable = Math.floor(remainingBudget / stockPrice);
           if (maxAffordable <= 0) {
             decision.quantity = 0; // Can't afford — watchlist only
           } else {
             decision.quantity = Math.min(decision.quantity, maxAffordable);
             remainingBudget -= decision.quantity * stockPrice;
           }
+        } else if (decision.quantity > 0) {
+          // No price data — keep Claude's quantity but cap at reasonable amount
+          remainingBudget = Math.max(0, remainingBudget - 1);
         }
       }
     }
