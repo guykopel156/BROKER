@@ -27,6 +27,16 @@ function initializeSocket(server: HttpServer): TypedServer {
   io.on('connection', (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
+    socket.on('engine:pause', async () => {
+      const { pauseEngine } = await import('./tradingEngine');
+      await pauseEngine();
+    });
+
+    socket.on('engine:resume', async () => {
+      const { resumeEngine } = await import('./tradingEngine');
+      await resumeEngine();
+    });
+
     socket.on('disconnect', () => {
       console.log(`Client disconnected: ${socket.id}`);
     });

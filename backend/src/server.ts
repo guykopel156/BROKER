@@ -5,6 +5,7 @@ import http from 'http';
 import config from './config';
 import connectDatabase from './config/database';
 import { initializeSocket } from './services/socketService';
+import { startEngine } from './services/tradingEngine';
 import { errorHandler } from './middleware';
 import routes from './routes';
 
@@ -28,6 +29,9 @@ async function start(): Promise<void> {
   initializeSocket(server);
   server.listen(config.port, () => {
     console.log(`Server running on port ${config.port}`);
+    startEngine().catch((err) => {
+      console.error('Failed to start trading engine:', err);
+    });
   });
 }
 
