@@ -90,7 +90,13 @@ function Recommendations(): ReactElement {
   const loadData = useCallback(async (): Promise<void> => {
     try {
       const data = await fetchRecommendations();
-      setRecommendations(data);
+      // Sort: buyable first (quantity > 0), then watchlist (quantity = 0)
+      const sorted = [...data].sort((a, b) => {
+        if (a.quantity > 0 && b.quantity === 0) return -1;
+        if (a.quantity === 0 && b.quantity > 0) return 1;
+        return b.confidence - a.confidence;
+      });
+      setRecommendations(sorted);
 
       const priceMap: Record<string, StockPrice> = {};
       for (const rec of data) {

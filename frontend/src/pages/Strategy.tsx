@@ -270,7 +270,12 @@ function Strategy(): ReactElement {
                 <span className="text-right">Sell Target</span>
               </div>
               {(() => {
-                const buyRecs = recommendations.filter((r) => r.action === 'BUY');
+                const buyRecs = [...recommendations.filter((r) => r.action === 'BUY')]
+                  .sort((a, b) => {
+                    if (a.quantity > 0 && b.quantity === 0) return -1;
+                    if (a.quantity === 0 && b.quantity > 0) return 1;
+                    return b.confidence - a.confidence;
+                  });
                 const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
                 let totalCost = 0;
                 let totalShares = 0;
