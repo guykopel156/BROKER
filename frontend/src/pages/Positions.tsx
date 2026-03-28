@@ -1,23 +1,75 @@
-import React, { type ReactElement } from 'react';
+import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
 
 import { PositionsSummary, OpenPositionsTable, ClosedPositionsTable } from '../components/positions';
 import { MOCK_OPEN_POSITIONS, MOCK_CLOSED_POSITIONS } from '../mocks/positionsData';
+import { fetchPositions } from '../services/api';
+
+import type { Position } from '../types';
+import type { ClosedPosition } from '../mocks/positionsData';
+
+interface IbkrPosition {
+  ticker: string;
+  position: number;
+  avgPrice: number;
+  mktPrice: number;
+  unrealizedPnl: number;
+}
 
 function Positions(): ReactElement {
+  const [openPositions, setOpenPositions] = useState<Position[]>(MOCK_OPEN_POSITIONS);
+  const [closedPositions] = useState<ClosedPosition[]>(MOCK_CLOSED_POSITIONS);
+  const [isLive, setIsLive] = useState(false);
+
+  const loadLiveData = useCallback(async (): Promise<void> => {
+    try {
+      const positions = await fetchPositions() as IbkrPosition[];
+
+      if (Array.isArray(positions) && positions.length > 0) {
+        const mapped: Position[] = positions.map((p) => ({
+          symbol: p.ticker,
+          shares: p.position,
+          avgEntryPrice: p.avgPrice,
+          currentPrice: p.mktPrice,
+          unrealizedPnl: p.unrealizedPnl,
+          unrealizedPnlPercent: p.avgPrice > 0
+            ? ((p.mktPrice - p.avgPrice) / p.avgPrice) * 100
+            : 0,
+        }));
+        setOpenPositions(mapped);
+        setIsLive(true);
+      }
+    } catch {
+      // Keep mock data
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLiveData();
+    const interval = setInterval(loadLiveData, 30000);
+    return () => clearInterval(interval);
+  }, [loadLiveData]);
+
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-text-primary dark:text-dark-text-primary">
-        Positions & P&L
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-text-primary dark:text-dark-text-primary">
+          Positions & P&L
+        </h1>
+        {isLive && (
+          <span className="px-3 py-1 bg-profit-light dark:bg-green-900/30 border border-profit/30 rounded-full text-xs font-medium text-green-800 dark:text-green-200">
+            Live
+          </span>
+        )}
+      </div>
 
       <PositionsSummary
-        openPositions={MOCK_OPEN_POSITIONS}
-        closedPositions={MOCK_CLOSED_POSITIONS}
+        openPositions={openPositions}
+        closedPositions={closedPositions}
       />
 
-      <OpenPositionsTable positions={MOCK_OPEN_POSITIONS} />
+      <OpenPositionsTable positions={openPositions} />
 
-      <ClosedPositionsTable positions={MOCK_CLOSED_POSITIONS} />
+      <ClosedPositionsTable positions={closedPositions} />
     </div>
   );
 }

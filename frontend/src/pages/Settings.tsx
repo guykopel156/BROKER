@@ -1,6 +1,8 @@
-import React, { useState, useCallback, type ReactElement } from 'react';
+import React, { useState, useEffect, useCallback, type ReactElement } from 'react';
 
 import { Button, Card, Input, Modal } from '../components/common';
+import { fetchSettings, updateSettings, fetchHealth } from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 const INTERVAL_OPTIONS = [
   { label: '5 min', value: 5 },
@@ -10,31 +12,61 @@ const INTERVAL_OPTIONS = [
   { label: '2 hours', value: 120 },
 ];
 
-const DEFAULT_STRATEGY = `You are an autonomous AI trading agent managing a real brokerage account. Your goal is to generate consistent, risk-managed returns through active stock trading.
-
-=== RISK MANAGEMENT ===
-- Never risk more than 2% of total portfolio value on a single trade
-- Maximum 5 open positions at any time
-- Keep at least 20% of portfolio in cash at all times
-
-=== ENTRY CRITERIA (need at least 2) ===
-- RSI below 35 (oversold) or above 65 with momentum
-- Price bouncing off key moving average (20 or 50 day)
-- Volume spike (1.5x+ average) confirming direction
-- MACD crossover in the direction of the trade
-
-=== EXIT CRITERIA ===
-- Take profit: 2-5% gain
-- Stop loss: 1-2% below entry
-- Time stop: exit if no progress after 2 trading days`;
+interface ConnectionStatus {
+  name: string;
+  isConnected: boolean;
+}
 
 function Settings(): ReactElement {
   const [maxLossPercent, setMaxLossPercent] = useState('10');
   const [tradingInterval, setTradingInterval] = useState(15);
-  const [strategyPrompt, setStrategyPrompt] = useState(DEFAULT_STRATEGY);
+  const [strategyPrompt, setStrategyPrompt] = useState('');
   const [isPaperTrading, setIsPaperTrading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [connections, setConnections] = useState<ConnectionStatus[]>([
+    { name: 'Backend Server', isConnected: false },
+    { name: 'MongoDB', isConnected: false },
+    { name: 'Claude API', isConnected: false },
+    { name: 'Polygon.io', isConnected: false },
+  ]);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    async function loadSettings(): Promise<void> {
+      try {
+        const data = await fetchSettings();
+        setMaxLossPercent(String(data.maxLossPercent));
+        setTradingInterval(data.tradingIntervalMinutes);
+        setStrategyPrompt(data.strategyPrompt);
+        setIsPaperTrading(data.isPaperTrading);
+      } catch {
+        showToast('Using default settings (backend unreachable)', 'warning');
+      }
+    }
+
+    async function checkConnections(): Promise<void> {
+      try {
+        await fetchHealth();
+        setConnections([
+          { name: 'Backend Server', isConnected: true },
+          { name: 'MongoDB', isConnected: true },
+          { name: 'Claude API', isConnected: true },
+          { name: 'Polygon.io', isConnected: true },
+        ]);
+      } catch {
+        setConnections([
+          { name: 'Backend Server', isConnected: false },
+          { name: 'MongoDB', isConnected: false },
+          { name: 'Claude API', isConnected: false },
+          { name: 'Polygon.io', isConnected: false },
+        ]);
+      }
+    }
+
+    loadSettings();
+    checkConnections();
+  }, [showToast]);
 
   const handleToggleTradingMode = useCallback((): void => {
     if (isPaperTrading) {
@@ -51,10 +83,20 @@ function Settings(): ReactElement {
 
   const handleSave = useCallback(async (): Promise<void> => {
     setIsSaving(true);
-    // Will connect to backend API later
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    setIsSaving(false);
-  }, []);
+    try {
+      await updateSettings({
+        maxLossPercent: Number(maxLossPercent),
+        tradingIntervalMinutes: tradingInterval,
+        strategyPrompt,
+        isPaperTrading,
+      });
+      showToast('Settings saved successfully', 'success');
+    } catch {
+      showToast('Failed to save settings', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [maxLossPercent, tradingInterval, strategyPrompt, isPaperTrading, showToast]);
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
@@ -63,34 +105,17 @@ function Settings(): ReactElement {
       {/* Connection Status */}
       <Card title="Connection Status">
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-text-secondary dark:text-dark-text-secondary">IBKR Gateway</span>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-loss" />
-              <span className="text-sm font-medium text-loss">Disconnected</span>
+          {connections.map((conn) => (
+            <div key={conn.name} className="flex items-center justify-between">
+              <span className="text-sm text-text-secondary dark:text-dark-text-secondary">{conn.name}</span>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${conn.isConnected ? 'bg-profit' : 'bg-loss'}`} />
+                <span className={`text-sm font-medium ${conn.isConnected ? 'text-profit' : 'text-loss'}`}>
+                  {conn.isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-text-secondary dark:text-dark-text-secondary">MongoDB</span>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-profit" />
-              <span className="text-sm font-medium text-profit">Connected</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Claude API</span>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-profit" />
-              <span className="text-sm font-medium text-profit">Connected</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Polygon.io</span>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-profit" />
-              <span className="text-sm font-medium text-profit">Connected</span>
-            </div>
-          </div>
+          ))}
         </div>
       </Card>
 
