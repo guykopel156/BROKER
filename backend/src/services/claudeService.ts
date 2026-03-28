@@ -82,8 +82,11 @@ class ClaudeService {
     }
 
     const availableCash = context.portfolio.availableCash;
-    lines.push(`\n=== BUDGET CONSTRAINT: You have $${availableCash.toFixed(2)} to spend ===`);
-    lines.push(`ONLY recommend stocks where price <= $${availableCash.toFixed(2)}`);
+    lines.push(`\n=== BUDGET CONSTRAINT: TOTAL available cash is $${availableCash.toFixed(2)} ===`);
+    lines.push(`This is your TOTAL budget across ALL buys combined.`);
+    lines.push(`If you recommend 2 stocks, they must SHARE this $${availableCash.toFixed(2)}.`);
+    lines.push(`Example: Stock A uses $5, Stock B uses remaining $5.`);
+    lines.push(`NEVER recommend buys that total more than $${availableCash.toFixed(2)}.`);
 
     lines.push('\n=== MARKET DATA (USE THESE EXACT PRICES) ===');
     const affordableStocks: string[] = [];

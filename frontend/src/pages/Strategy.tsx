@@ -157,7 +157,7 @@ function Strategy(): ReactElement {
             </div>
           </div>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-sm mb-3">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded bg-warning" />
             <span className="text-text-secondary dark:text-dark-text-secondary">Short-Term: {shortCount} ({shortPercent.toFixed(0)}%)</span>
@@ -167,6 +167,13 @@ function Strategy(): ReactElement {
             <span className="text-text-secondary dark:text-dark-text-secondary">Long-Term: {longCount} ({longPercent.toFixed(0)}%)</span>
           </div>
         </div>
+        {longCount === 0 && recommendations.length > 0 && (
+          <div className="mt-3 px-3 py-2 rounded-lg bg-warning-light/30 dark:bg-yellow-900/10 border border-warning/30">
+            <p className="text-xs text-yellow-800 dark:text-yellow-200">
+              No long-term picks yet. With a $10 budget, most affordable stocks are short-term momentum plays. Long-term ETFs (SPY, QQQ) require $400+. As your portfolio grows, the agent will start recommending long-term holdings.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

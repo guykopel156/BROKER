@@ -21,4 +21,13 @@ async function getLatestRecommendations(_req: Request, res: Response): Promise<v
   res.json({ data: latest });
 }
 
-export { getLatestRecommendations };
+async function getAllRecommendations(req: Request, res: Response): Promise<void> {
+  const limit = Number(req.query.limit) || 50;
+  const all = await Recommendation.find()
+    .sort({ cycleTimestamp: -1 })
+    .limit(limit);
+
+  res.json({ data: all });
+}
+
+export { getLatestRecommendations, getAllRecommendations };
