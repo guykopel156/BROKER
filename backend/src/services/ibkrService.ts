@@ -1,5 +1,7 @@
 import axios, { type AxiosInstance } from 'axios';
 import https from 'https';
+import { exec } from 'child_process';
+import { platform } from 'os';
 
 import config from '../config';
 import { AppError } from '../utils';
@@ -17,11 +19,22 @@ import type {
 const TICKLE_INTERVAL_MS = 55000;
 const AUTH_CHECK_INTERVAL_MS = 30000;
 
+
+interface ConidSearchResult {
+  conid: number;
+  companyHeader: string;
+  companyName: string;
+  symbol: string;
+  description: string;
+}
+
 class IbkrService {
   private client: AxiosInstance;
   private tickleTimer: NodeJS.Timeout | null = null;
   private authCheckTimer: NodeJS.Timeout | null = null;
   private isAuthenticated = false;
+  private hasOpenedBrowser = false;
+  private conidCache: Map<string, number> = new Map();
 
   constructor() {
     this.client = axios.create({
@@ -44,6 +57,7 @@ class IbkrService {
     }
 
     this.isAuthenticated = true;
+    this.hasOpenedBrowser = false;
     return response;
   }
 
@@ -76,12 +90,54 @@ class IbkrService {
       const status = await this.get<IbkrAuthStatus>('/iserver/auth/status');
       if (status.authenticated) {
         this.isAuthenticated = true;
+        this.hasOpenedBrowser = false;
         console.log('IBKR: Reconnected successfully');
       } else {
-        console.log('IBKR: Reconnect failed — need manual login at https://localhost:5000');
+        console.log('IBKR: Reconnect failed — opening login page');
+        this.openGatewayLoginPage();
       }
     } catch {
-      console.log('IBKR: Gateway unreachable — make sure bin\\run.bat is running');
+      console.log('IBKR: Gateway unreachable — opening login page');
+      this.openGatewayLoginPage();
+    }
+  }
+
+  private openGatewayLoginPage(): void {
+    if (this.hasOpenedBrowser) {
+      return;
+    }
+    this.hasOpenedBrowser = true;
+
+    const gatewayUrl = config.ibkrBaseUrl.replace('/v1/api', '');
+    const openCommand = platform() === 'win32'
+      ? `start "" "${gatewayUrl}"`
+      : platform() === 'darwin'
+        ? `open "${gatewayUrl}"`
+        : `xdg-open "${gatewayUrl}"`;
+
+    exec(openCommand, (error) => {
+      if (error) {
+        console.error('IBKR: Failed to open browser:', error.message);
+      }
+    });
+
+    console.log(`IBKR: Opened browser for login at ${gatewayUrl}`);
+  }
+
+  async checkGatewayOnStartup(): Promise<void> {
+    try {
+      const status = await this.get<IbkrAuthStatus>('/iserver/auth/status');
+      if (status.authenticated) {
+        this.isAuthenticated = true;
+        this.hasOpenedBrowser = false;
+        console.log('IBKR: Gateway is running and authenticated');
+        return;
+      }
+      console.log('IBKR: Gateway is running but not authenticated — opening login page');
+      this.openGatewayLoginPage();
+    } catch {
+      console.log('IBKR: Gateway is not reachable — opening login page');
+      this.openGatewayLoginPage();
     }
   }
 
@@ -145,6 +201,48 @@ class IbkrService {
 
   getConnectionStatus(): { isAuthenticated: boolean } {
     return { isAuthenticated: this.isAuthenticated };
+  }
+
+  // ── Contract ID Lookup ──
+
+  async getConid(symbol: string): Promise<number> {
+    // Check cache first
+    const cached = this.conidCache.get(symbol.toUpperCase());
+    if (cached) return cached;
+
+    await this.ensureAuthenticated();
+
+    // Search IBKR for the symbol
+    const results = await this.get<ConidSearchResult[]>(
+      `/iserver/secdef/search?symbol=${encodeURIComponent(symbol)}&name=true&secType=STK`
+    );
+
+    if (!results || results.length === 0) {
+      throw new AppError(404, 'CONID_NOT_FOUND', `No IBKR contract found for ${symbol}`);
+    }
+
+    // Find US stock match
+    const match = results.find((r) => r.symbol?.toUpperCase() === symbol.toUpperCase())
+      ?? results[0];
+
+    const conid = match.conid;
+    this.conidCache.set(symbol.toUpperCase(), conid);
+
+    return conid;
+  }
+
+  // Pre-populate cache from current positions
+  async cachePositionConids(): Promise<void> {
+    try {
+      const positions = await this.getPositions();
+      for (const pos of positions) {
+        if (pos.ticker && pos.conid) {
+          this.conidCache.set(pos.ticker.toUpperCase(), pos.conid);
+        }
+      }
+    } catch {
+      // Non-critical — cache will be populated on demand
+    }
   }
 
   // ── Account ──

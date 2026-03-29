@@ -61,6 +61,8 @@ export interface SettingsData {
   strategyPrompt: string;
   isPaperTrading: boolean;
   isClaudePaused: boolean;
+  polygonTrialStart: string | null;
+  polygonTrialDays: number;
 }
 
 export async function fetchSettings(): Promise<SettingsData> {
@@ -152,6 +154,75 @@ export interface RecommendationData {
 
 export async function fetchRecommendations(): Promise<RecommendationData[]> {
   const response = await api.get('/recommendations');
+  return response.data.data;
+}
+
+// ── Screened Candidates ──
+
+export interface CandidateData {
+  ticker: string;
+  price: number;
+  changePct: number;
+  volume: number;
+  score: number;
+  rsi: number | null;
+  macdHist: number | null;
+  momentum: 'bullish' | 'bearish' | 'neutral';
+  atr: number | null;
+  affordable: boolean;
+  sharesBuyable: number;
+}
+
+export async function fetchCandidates(): Promise<CandidateData[]> {
+  const response = await api.get('/engine/candidates');
+  return response.data.data;
+}
+
+// ── Predictions ──
+
+export interface PredictionData {
+  symbol: string;
+  entryPrice: number;
+  currentPrice: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  quantity: number;
+  currentPnl: number;
+  currentPnlPercent: number;
+  predictedEodPrice: number;
+  predictedEodPnl: number;
+  predictedEodPnlPercent: number;
+  predictedTotalProfit: number;
+  momentum: 'bullish' | 'bearish' | 'neutral';
+  rsi: number | null;
+  distanceToTarget: number | null;
+  distanceToStop: number | null;
+  confidence: number;
+  strategy: string;
+}
+
+export interface PredictionsResponse {
+  data: PredictionData[];
+  totalPredictedProfit: number;
+}
+
+export async function fetchPredictions(): Promise<PredictionsResponse> {
+  const response = await api.get('/recommendations/predictions');
+  return response.data;
+}
+
+// ── Manual Orders ──
+
+export interface ManualOrderParams {
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  quantity: number;
+  orderType: 'MKT' | 'LMT';
+  price?: number;
+}
+
+export async function placeManualOrder(params: ManualOrderParams): Promise<{ orderId: string; orderStatus: string }> {
+  const response = await api.post('/orders', params);
   return response.data.data;
 }
 

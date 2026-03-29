@@ -22,11 +22,13 @@ interface BillingData {
 }
 
 const INTERVAL_OPTIONS = [
+  { label: '1 min', value: 1 },
+  { label: '2 min', value: 2 },
+  { label: '3 min', value: 3 },
   { label: '5 min', value: 5 },
   { label: '15 min', value: 15 },
   { label: '30 min', value: 30 },
   { label: '1 hour', value: 60 },
-  { label: '2 hours', value: 120 },
 ];
 
 interface ConnectionStatus {
@@ -37,6 +39,8 @@ interface ConnectionStatus {
 function Settings(): ReactElement {
   const [maxLossPercent, setMaxLossPercent] = useState('10');
   const [tradingInterval, setTradingInterval] = useState(15);
+  const [polygonTrialStart, setPolygonTrialStart] = useState<string | null>(null);
+  const [polygonTrialDays, setPolygonTrialDays] = useState(30);
   const [strategyPrompt, setStrategyPrompt] = useState('');
   const [isPaperTrading, setIsPaperTrading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -63,6 +67,8 @@ function Settings(): ReactElement {
         setTradingInterval(data.tradingIntervalMinutes);
         setStrategyPrompt(data.strategyPrompt);
         setIsPaperTrading(data.isPaperTrading);
+        if (data.polygonTrialStart) setPolygonTrialStart(data.polygonTrialStart);
+        if (data.polygonTrialDays) setPolygonTrialDays(data.polygonTrialDays);
       } catch {
         showToast('Using default settings (backend unreachable)', 'warning');
       }
@@ -440,6 +446,49 @@ function Settings(): ReactElement {
             <p className="text-sm text-text-muted dark:text-dark-text-muted">Loading...</p>
           )}
         </Card>
+
+        {/* Polygon Trial Countdown */}
+        {polygonTrialStart && (
+          <Card title="Polygon.io Starter Trial">
+            {(() => {
+              const start = new Date(polygonTrialStart);
+              const end = new Date(start.getTime() + polygonTrialDays * 24 * 60 * 60 * 1000);
+              const now = new Date();
+              const daysLeft = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+              const progressPct = Math.min(100, ((polygonTrialDays - daysLeft) / polygonTrialDays) * 100);
+              const isUrgent = daysLeft <= 7;
+              const isExpired = daysLeft === 0;
+
+              return (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Started</span>
+                    <span className="text-sm text-text-primary dark:text-dark-text-primary">{start.toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Cancel by</span>
+                    <span className={`text-sm font-bold ${isUrgent ? 'text-loss' : 'text-text-primary dark:text-dark-text-primary'}`}>{end.toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Days left</span>
+                    <span className={`text-2xl font-bold ${isExpired ? 'text-loss' : isUrgent ? 'text-warning' : 'text-profit'}`}>
+                      {isExpired ? 'EXPIRED' : `${daysLeft} days`}
+                    </span>
+                  </div>
+                  <div className="w-full bg-surface-tertiary dark:bg-dark-surface-tertiary rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${isUrgent ? 'bg-loss' : 'bg-primary'}`}
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-text-muted dark:text-dark-text-muted">
+                    $29/mo — cancel at polygon.io/account if not profitable
+                  </div>
+                </div>
+              );
+            })()}
+          </Card>
+        )}
       </div>
       </div>
 

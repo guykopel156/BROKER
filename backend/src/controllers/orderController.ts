@@ -1,12 +1,16 @@
 import type { Request, Response } from 'express';
 
+import config from '../config';
 import ibkrService from '../services/ibkrService';
+import { Trade, Recommendation } from '../models';
+import { createAuditLog } from '../services/auditLogService';
 import { AppError } from '../utils';
 
 import type { IbkrOrderRequest } from '../types/ibkr';
 
 interface PlaceOrderBody {
-  conid: number;
+  symbol?: string;
+  conid?: number;
   side: 'BUY' | 'SELL';
   quantity: number;
   orderType: 'MKT' | 'LMT';
@@ -15,15 +19,19 @@ interface PlaceOrderBody {
 }
 
 async function placeOrder(req: Request, res: Response): Promise<void> {
-  const { conid, side, quantity, orderType, price, tif } = req.body as PlaceOrderBody;
+  const { symbol, conid, side, quantity, orderType, price, tif } = req.body as PlaceOrderBody;
 
-  if (!conid || !side || !quantity || !orderType) {
-    throw new AppError(400, 'INVALID_ORDER', 'Missing required fields: conid, side, quantity, orderType');
+  if ((!conid && !symbol) || !side || !quantity || !orderType) {
+    throw new AppError(400, 'INVALID_ORDER', 'Missing required fields: symbol (or conid), side, quantity, orderType');
   }
 
+  // Resolve conid from symbol if not provided
+  const resolvedConid = conid ?? await ibkrService.getConid(symbol as string);
+  const tickerSymbol = symbol ?? `conid:${resolvedConid}`;
+
   const order: IbkrOrderRequest = {
-    acctId: '',
-    conid,
+    acctId: config.ibkrAccountId,
+    conid: resolvedConid,
     side,
     quantity,
     orderType,
@@ -32,6 +40,39 @@ async function placeOrder(req: Request, res: Response): Promise<void> {
   };
 
   const result = await ibkrService.placeOrder(order);
+
+  // Auto-confirm if there's a warning
+  if (result.warningMessage) {
+    await ibkrService.confirmOrder(result.orderId);
+  }
+
+  // Log the trade
+  await Trade.create({
+    symbol: tickerSymbol,
+    action: side,
+    quantity,
+    price: price ?? 0,
+    totalValue: 0,
+    reasoning: 'Manual trade',
+    status: 'in-progress',
+    strategy: 'Manual',
+    exchange: 'US',
+    executedAt: new Date(),
+  });
+
+  // If selling, deactivate the recommendation
+  if (side === 'SELL') {
+    await Recommendation.updateMany(
+      { symbol: tickerSymbol, isActive: true },
+      { isActive: false, closedAt: new Date(), closeReason: 'MANUAL_SELL' }
+    );
+  }
+
+  await createAuditLog({
+    action: 'MANUAL_TRADE',
+    details: `Manual ${side} ${quantity} ${tickerSymbol}. Order ID: ${result.orderId}`,
+  });
+
   res.json({ data: result });
 }
 

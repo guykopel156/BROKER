@@ -20,14 +20,15 @@ async function handleGetBilling(_req: Request, res: Response): Promise<void> {
     AVG_OUTPUT_TOKENS_PER_CYCLE * CLAUDE_OUTPUT_COST_PER_TOKEN
   );
 
-  const totalCost = totalClaudeCost;
+  const polygonCost = 29;
+  const totalCost = totalClaudeCost + polygonCost;
 
   res.json({
     data: {
       month: now.toLocaleString('en-US', { month: 'long', year: 'numeric' }),
       services: [
         { name: 'Claude API', description: 'Trading engine + chat bot', cost: totalClaudeCost, details: `${claudeResponses} API calls`, plan: 'Pay per use' },
-        { name: 'Polygon.io', description: 'Market data & stock prices', cost: 0, details: 'Free tier (5 calls/min)', plan: 'Free' },
+        { name: 'Polygon.io', description: 'Real-time market data & stock prices', cost: polygonCost, details: 'Unlimited calls, real-time data', plan: 'Starter ($29/mo)' },
         { name: 'Twilio WhatsApp', description: 'WhatsApp notifications', cost: 0, details: 'Sandbox (free)', plan: 'Free' },
         { name: 'MongoDB Atlas', description: 'Database storage', cost: 0, details: `${recCount} records`, plan: 'Free tier' },
         { name: 'IBKR', description: 'Brokerage connection', cost: 0, details: 'No API fees', plan: 'Free' },

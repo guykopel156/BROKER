@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { asyncWrapper } from '../middleware';
-import { handlePause, handleResume, handleRunCycle, handleGetAuditLogs, handleCycleStatus } from '../controllers/engineController';
+import { handlePause, handleResume, handleRunCycle, handleGetAuditLogs, handleCycleStatus, handleScreenedCandidates, handleTradeStats } from '../controllers/engineController';
 
 const router = Router();
 
@@ -10,5 +10,7 @@ router.post('/resume', asyncWrapper(handleResume));
 router.post('/run-cycle', asyncWrapper(handleRunCycle));
 router.get('/audit-logs', asyncWrapper(handleGetAuditLogs));
 router.get('/cycle-status', handleCycleStatus);
+router.get('/candidates', handleScreenedCandidates);
+router.get('/stats', asyncWrapper(handleTradeStats));
 
 export default router;

@@ -3,9 +3,9 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Badge, LoadingSpinner } from '../components/common';
 import MiniChart from '../components/dashboard/MiniChart';
-import { fetchPositions, fetchRecommendations, authFetch } from '../services/api';
+import { fetchPositions, fetchRecommendations, fetchPredictions, fetchCandidates, authFetch, placeManualOrder } from '../services/api';
 
-import type { RecommendationData } from '../services/api';
+import type { RecommendationData, PredictionData, CandidateData } from '../services/api';
 
 interface IbkrPosition {
   ticker: string;
@@ -43,11 +43,52 @@ function Strategy(): ReactElement {
   const [isLoading, setIsLoading] = useState(true);
   const [shortCount, setShortCount] = useState(0);
   const [longCount, setLongCount] = useState(0);
+  const [predictions, setPredictions] = useState<PredictionData[]>([]);
+  const [totalPredictedProfit, setTotalPredictedProfit] = useState(0);
+  const [candidates, setCandidates] = useState<CandidateData[]>([]);
+  const [orderingSymbol, setOrderingSymbol] = useState<string | null>(null);
+  const [orderMessage, setOrderMessage] = useState<string | null>(null);
+
+  const handleManualBuy = async (symbol: string, quantity: number): Promise<void> => {
+    if (quantity < 1) return;
+    setOrderingSymbol(symbol);
+    setOrderMessage(null);
+    try {
+      await placeManualOrder({ symbol, side: 'BUY', quantity, orderType: 'MKT' });
+      setOrderMessage(`BUY ${quantity} ${symbol} — order placed`);
+      loadData();
+    } catch {
+      setOrderMessage(`Failed to buy ${symbol}`);
+    } finally {
+      setOrderingSymbol(null);
+      setTimeout(() => setOrderMessage(null), 5000);
+    }
+  };
+
+  const handleManualSell = async (symbol: string, quantity: number): Promise<void> => {
+    if (quantity < 1) return;
+    setOrderingSymbol(symbol);
+    setOrderMessage(null);
+    try {
+      await placeManualOrder({ symbol, side: 'SELL', quantity, orderType: 'MKT' });
+      setOrderMessage(`SELL ${quantity} ${symbol} — order placed`);
+      loadData();
+    } catch {
+      setOrderMessage(`Failed to sell ${symbol}`);
+    } finally {
+      setOrderingSymbol(null);
+      setTimeout(() => setOrderMessage(null), 5000);
+    }
+  };
 
   const loadData = useCallback(async (): Promise<void> => {
     try {
-      // Recommendations
-      const recs = await fetchRecommendations();
+      // Step 1: Load recommendations + positions (fast, no Polygon calls)
+      const [recs, posResult] = await Promise.all([
+        fetchRecommendations().catch(() => [] as RecommendationData[]),
+        fetchPositions().catch(() => []) as Promise<IbkrPosition[]>,
+      ]);
+
       setRecommendations(recs);
 
       const shorts = recs.filter((r) => r.holdType === 'short' || !r.strategy?.toLowerCase().startsWith('long')).length;
@@ -55,118 +96,115 @@ function Strategy(): ReactElement {
       setShortCount(shorts);
       setLongCount(longs);
 
-      // Fetch prices for recommended stocks
-      const priceMap: Record<string, number> = {};
-      for (const rec of recs) {
-        if (rec.symbol && !priceMap[rec.symbol]) {
-          try {
-            const priceRes = await authFetch(`/market/${rec.symbol}/price`);
-            const priceData = await priceRes.json();
-            if (priceData.data?.price) {
-              priceMap[rec.symbol] = priceData.data.price;
-            }
-          } catch { /* skip */ }
-        }
+      // Map positions
+      if (Array.isArray(posResult)) {
+        const mapped: PositionWithSignal[] = posResult.map((p) => {
+          const pnlPercent = p.avgPrice > 0 ? ((p.mktPrice - p.avgPrice) / p.avgPrice) * 100 : 0;
+          let signal: 'hold' | 'sell' | 'add' = 'hold';
+          let signalReason = 'Maintaining position — no action needed';
+
+          if (pnlPercent <= -15) {
+            signal = 'sell';
+            signalReason = `Down ${Math.abs(pnlPercent).toFixed(1)}% — stop loss triggered. Consider selling to protect capital.`;
+          } else if (pnlPercent >= 20) {
+            signal = 'sell';
+            signalReason = `Up ${pnlPercent.toFixed(1)}% — consider taking profits before pullback.`;
+          } else if (pnlPercent <= -5) {
+            signal = 'hold';
+            signalReason = `Down ${Math.abs(pnlPercent).toFixed(1)}% — watching closely. Will sell if drops to -15%.`;
+          } else if (pnlPercent >= 5) {
+            signal = 'hold';
+            signalReason = `Up ${pnlPercent.toFixed(1)}% — looking good. Holding for higher target.`;
+          } else if (pnlPercent >= 0) {
+            signal = 'add';
+            signalReason = `Slightly up — consider adding to position if thesis still valid.`;
+          }
+
+          const sellRec = recs.find((r) => r.symbol === p.ticker && r.action === 'SELL');
+          if (sellRec) {
+            signal = 'sell';
+            signalReason = `Agent recommends selling: ${sellRec.reasoning.substring(0, 100)}...`;
+          }
+
+          return {
+            symbol: p.ticker,
+            shares: p.position,
+            avgPrice: p.avgPrice,
+            currentPrice: p.mktPrice,
+            pnl: p.unrealizedPnl,
+            pnlPercent,
+            signal,
+            signalReason,
+          };
+        });
+        setPositions(mapped);
       }
+    } catch { /* no data */ }
+    finally { setIsLoading(false); }
+
+    // Step 2: Load predictions + candidates
+    try {
+      const [predResult, candidateResult] = await Promise.all([
+        fetchPredictions().catch(() => ({ data: [], totalPredictedProfit: 0 })),
+        fetchCandidates().catch(() => []),
+      ]);
+      setPredictions(predResult.data);
+      setTotalPredictedProfit(predResult.totalPredictedProfit);
+      setCandidates(candidateResult);
+    } catch { /* skip */ }
+
+    // Step 3: Load prices + details in background (won't block page)
+    try {
+      const recs = await fetchRecommendations().catch(() => [] as RecommendationData[]);
+      const uniqueSymbols = Array.from(new Set(recs.map((r) => r.symbol).filter(Boolean)));
+
+      // Fetch all prices in parallel
+      const priceMap: Record<string, number> = {};
+      const pricePromises = uniqueSymbols.map(async (sym) => {
+        try {
+          const priceRes = await authFetch(`/market/${sym}/price`);
+          const priceData = await priceRes.json();
+          if (priceData.data?.price) {
+            priceMap[sym] = priceData.data.price;
+          }
+        } catch { /* skip */ }
+      });
+      await Promise.all(pricePromises);
       setPrices(priceMap);
 
-      // Fetch stock details
+      // Fetch details one at a time (rate limited)
       const detailsMap: Record<string, { name: string; description: string; sector: string; marketCap: number }> = {};
-      for (const rec of recs) {
-        if (rec.symbol && !detailsMap[rec.symbol]) {
-          try {
-            const detailRes = await authFetch(`/market/${rec.symbol}/details`);
-            const detailData = await detailRes.json();
-            if (detailData.data) {
-              detailsMap[rec.symbol] = {
-                name: detailData.data.name ?? rec.symbol,
-                description: detailData.data.description ?? '',
-                sector: detailData.data.sector ?? '',
-                marketCap: detailData.data.marketCap ?? 0,
-              };
-            }
-          } catch { /* skip */ }
-        }
+      for (const sym of uniqueSymbols.slice(0, 5)) {
+        try {
+          const detailRes = await authFetch(`/market/${sym}/details`);
+          const detailData = await detailRes.json();
+          if (detailData.data) {
+            detailsMap[sym] = {
+              name: detailData.data.name ?? sym,
+              description: detailData.data.description ?? '',
+              sector: detailData.data.sector ?? '',
+              marketCap: detailData.data.marketCap ?? 0,
+            };
+          }
+        } catch { /* skip */ }
       }
       setStockDetails(detailsMap);
 
-      // Positions
-      try {
-        const pos = await fetchPositions() as IbkrPosition[];
-        if (Array.isArray(pos)) {
-          const mapped: PositionWithSignal[] = pos.map((p) => {
-            const pnlPercent = p.avgPrice > 0 ? ((p.mktPrice - p.avgPrice) / p.avgPrice) * 100 : 0;
-            let signal: 'hold' | 'sell' | 'add' = 'hold';
-            let signalReason = 'Maintaining position — no action needed';
-
-            if (pnlPercent <= -15) {
-              signal = 'sell';
-              signalReason = `Down ${Math.abs(pnlPercent).toFixed(1)}% — stop loss triggered. Consider selling to protect capital.`;
-            } else if (pnlPercent >= 20) {
-              signal = 'sell';
-              signalReason = `Up ${pnlPercent.toFixed(1)}% — consider taking profits before pullback.`;
-            } else if (pnlPercent <= -5) {
-              signal = 'hold';
-              signalReason = `Down ${Math.abs(pnlPercent).toFixed(1)}% — watching closely. Will sell if drops to -15%.`;
-            } else if (pnlPercent >= 5) {
-              signal = 'hold';
-              signalReason = `Up ${pnlPercent.toFixed(1)}% — looking good. Holding for higher target.`;
-            } else if (pnlPercent >= 0) {
-              signal = 'add';
-              signalReason = `Slightly up — consider adding to position if thesis still valid.`;
-            }
-
-            // Check if any recommendation says to sell this stock
-            const sellRec = recs.find((r) => r.symbol === p.ticker && r.action === 'SELL');
-            if (sellRec) {
-              signal = 'sell';
-              signalReason = `Agent recommends selling: ${sellRec.reasoning.substring(0, 100)}...`;
-            }
-
-            return {
-              symbol: p.ticker,
-              shares: p.position,
-              avgPrice: p.avgPrice,
-              currentPrice: p.mktPrice,
-              pnl: p.unrealizedPnl,
-              pnlPercent,
-              signal,
-              signalReason,
-            };
+      // News from details we already have
+      const allNews: StockNews[] = [];
+      for (const sym of Object.keys(detailsMap).slice(0, 3)) {
+        const detail = detailsMap[sym];
+        if (detail?.description) {
+          allNews.push({
+            title: `${detail.name} — ${detail.description.substring(0, 150)}`,
+            source: detail.sector || 'Market',
+            publishedAt: new Date().toLocaleString(),
+            symbol: sym,
           });
-          setPositions(mapped);
         }
-      } catch { /* not connected */ }
-
-      // News
-      try {
-        const symbols = recs.map((r) => r.symbol).filter(Boolean);
-        if (symbols.length > 0) {
-          const response = await authFetch(`/market/${symbols[0]}/details`);
-          const result = await response.json();
-          if (result.data) {
-            // Fetch news for first 3 symbols
-            const allNews: StockNews[] = [];
-            for (const sym of symbols.slice(0, 3)) {
-              try {
-                const newsResponse = await authFetch(`/market/${sym}/details`);
-                const newsResult = await newsResponse.json();
-                if (newsResult.data?.description) {
-                  allNews.push({
-                    title: `${newsResult.data.name} — ${newsResult.data.description.substring(0, 150)}`,
-                    source: newsResult.data.exchange,
-                    publishedAt: new Date().toLocaleString(),
-                    symbol: sym,
-                  });
-                }
-              } catch { /* skip */ }
-            }
-            setNews(allNews);
-          }
-        }
-      } catch { /* skip */ }
-    } catch { /* no data */ }
-    finally { setIsLoading(false); }
+      }
+      setNews(allNews);
+    } catch { /* background load failed, page still works */ }
   }, []);
 
   useEffect(() => {
@@ -365,9 +403,175 @@ function Strategy(): ReactElement {
         {/* Left: Recommendations + Positions */}
         <div className="lg:col-span-2 flex flex-col gap-6">
 
+          {/* Predictions */}
+          {predictions.length > 0 && (
+            <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-text-muted dark:text-dark-text-muted uppercase tracking-wider">End of Day Prediction</h2>
+                <div className={`text-lg font-bold ${totalPredictedProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
+                  {totalPredictedProfit >= 0 ? '+' : ''}${totalPredictedProfit.toFixed(2)}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-text-muted dark:text-dark-text-muted border-b border-border dark:border-dark-border">
+                      <th className="text-left py-2 pr-3">Stock</th>
+                      <th className="text-right py-2 px-2">Shares</th>
+                      <th className="text-right py-2 px-2">Entry</th>
+                      <th className="text-right py-2 px-2">Now</th>
+                      <th className="text-right py-2 px-2">Predicted EOD</th>
+                      <th className="text-right py-2 px-2">Current P&L</th>
+                      <th className="text-right py-2 px-2">Predicted P&L</th>
+                      <th className="text-center py-2 px-2">Momentum</th>
+                      <th className="text-right py-2 px-2">To Target</th>
+                      <th className="text-right py-2 pl-2">To Stop</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {predictions.map((pred) => (
+                      <tr key={pred.symbol} className="border-b border-border/30 dark:border-dark-border/30 hover:bg-surface-secondary/50 dark:hover:bg-dark-surface-tertiary/50">
+                        <td className="py-3 pr-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-text-primary dark:text-dark-text-primary">{pred.symbol}</span>
+                            {pred.rsi !== null && (
+                              <span className={`text-[10px] px-1 rounded ${
+                                pred.rsi < 30 ? 'bg-profit/20 text-profit' :
+                                pred.rsi > 70 ? 'bg-loss/20 text-loss' :
+                                'bg-dark-border/50 text-text-muted dark:text-dark-text-muted'
+                              }`}>
+                                RSI {pred.rsi.toFixed(0)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-right py-3 px-2 text-text-primary dark:text-dark-text-primary">{pred.quantity}</td>
+                        <td className="text-right py-3 px-2 text-text-muted dark:text-dark-text-muted">${pred.entryPrice.toFixed(4)}</td>
+                        <td className="text-right py-3 px-2 text-text-primary dark:text-dark-text-primary font-medium">${pred.currentPrice.toFixed(4)}</td>
+                        <td className={`text-right py-3 px-2 font-medium ${pred.predictedEodPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                          ${pred.predictedEodPrice.toFixed(4)}
+                        </td>
+                        <td className={`text-right py-3 px-2 ${pred.currentPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                          {pred.currentPnl >= 0 ? '+' : ''}${pred.currentPnl.toFixed(2)}
+                          <div className="text-[10px]">({pred.currentPnlPercent.toFixed(1)}%)</div>
+                        </td>
+                        <td className={`text-right py-3 px-2 font-bold ${pred.predictedEodPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                          {pred.predictedEodPnl >= 0 ? '+' : ''}${pred.predictedEodPnl.toFixed(2)}
+                          <div className="text-[10px]">({pred.predictedEodPnlPercent.toFixed(1)}%)</div>
+                        </td>
+                        <td className="text-center py-3 px-2">
+                          <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${
+                            pred.momentum === 'bullish' ? 'bg-profit/20 text-profit' :
+                            pred.momentum === 'bearish' ? 'bg-loss/20 text-loss' :
+                            'bg-dark-border/50 text-text-muted dark:text-dark-text-muted'
+                          }`}>
+                            {pred.momentum}
+                          </span>
+                        </td>
+                        <td className="text-right py-3 px-2 text-profit text-xs">
+                          {pred.distanceToTarget !== null ? `${pred.distanceToTarget.toFixed(1)}%` : '—'}
+                        </td>
+                        <td className="text-right py-3 pl-2 text-loss text-xs">
+                          {pred.distanceToStop !== null ? `${pred.distanceToStop.toFixed(1)}%` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 pt-3 border-t border-border dark:border-dark-border flex justify-between text-xs text-text-muted dark:text-dark-text-muted">
+                <span>Based on ATR, RSI, MACD momentum — not financial advice</span>
+                <span className={`font-bold ${totalPredictedProfit >= 0 ? 'text-profit' : 'text-loss'}`}>
+                  Total EOD: {totalPredictedProfit >= 0 ? '+' : ''}${totalPredictedProfit.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Agent's Radar — Screened Candidates */}
+          {candidates.length > 0 && (
+            <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5">
+              <h2 className="text-sm font-semibold text-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-4">
+                Agent&apos;s Radar — {candidates.length} Stocks Scanned
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-text-muted dark:text-dark-text-muted border-b border-border dark:border-dark-border">
+                      <th className="text-left py-2 pr-2">Ticker</th>
+                      <th className="text-right py-2 px-2">Price</th>
+                      <th className="text-right py-2 px-2">Change</th>
+                      <th className="text-right py-2 px-2">Volume</th>
+                      <th className="text-center py-2 px-2">RSI</th>
+                      <th className="text-center py-2 px-2">Momentum</th>
+                      <th className="text-right py-2 px-2">Can Buy</th>
+                      <th className="text-right py-2 pl-2">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candidates.map((c) => (
+                      <tr key={c.ticker} className={`border-b border-border/20 dark:border-dark-border/20 ${!c.affordable ? 'opacity-40' : ''}`}>
+                        <td className="py-2 pr-2 font-bold text-text-primary dark:text-dark-text-primary">{c.ticker}</td>
+                        <td className="text-right py-2 px-2 text-text-primary dark:text-dark-text-primary">${c.price.toFixed(4)}</td>
+                        <td className={`text-right py-2 px-2 font-medium ${c.changePct >= 0 ? 'text-profit' : 'text-loss'}`}>
+                          {c.changePct >= 0 ? '+' : ''}{c.changePct.toFixed(1)}%
+                        </td>
+                        <td className="text-right py-2 px-2 text-text-muted dark:text-dark-text-muted">
+                          {c.volume > 1000000 ? `${(c.volume / 1000000).toFixed(1)}M` : `${(c.volume / 1000).toFixed(0)}K`}
+                        </td>
+                        <td className="text-center py-2 px-2">
+                          {c.rsi !== null ? (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${
+                              c.rsi < 30 ? 'bg-profit/20 text-profit' :
+                              c.rsi > 70 ? 'bg-loss/20 text-loss' :
+                              'bg-dark-border/30 text-text-muted dark:text-dark-text-muted'
+                            }`}>
+                              {c.rsi.toFixed(0)}
+                            </span>
+                          ) : <span className="text-text-muted dark:text-dark-text-muted">—</span>}
+                        </td>
+                        <td className="text-center py-2 px-2">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                            c.momentum === 'bullish' ? 'bg-profit/20 text-profit' :
+                            c.momentum === 'bearish' ? 'bg-loss/20 text-loss' :
+                            'bg-dark-border/30 text-text-muted dark:text-dark-text-muted'
+                          }`}>
+                            {c.momentum}
+                          </span>
+                        </td>
+                        <td className="text-right py-2 px-2 text-text-primary dark:text-dark-text-primary">
+                          {c.affordable ? `${c.sharesBuyable} shares` : '—'}
+                        </td>
+                        <td className="text-right py-2 pl-2">
+                          {c.affordable && c.sharesBuyable > 0 && c.momentum !== 'bearish' && (
+                            <button
+                              onClick={() => handleManualBuy(c.ticker, Math.min(c.sharesBuyable, Math.ceil(c.sharesBuyable / 3)))}
+                              disabled={orderingSymbol === c.ticker}
+                              className="px-2 py-1 text-xs font-bold rounded bg-profit/20 text-profit hover:bg-profit/30 border border-profit/30 transition-colors disabled:opacity-50"
+                            >
+                              {orderingSymbol === c.ticker ? '...' : 'Buy'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-2 text-[10px] text-text-muted dark:text-dark-text-muted">
+                Refreshes each cycle — shows what the agent is analyzing
+              </div>
+            </div>
+          )}
+
           {/* Next Moves */}
           <div className="bg-surface dark:bg-dark-surface-secondary border border-border dark:border-dark-border rounded-xl p-5">
             <h2 className="text-sm font-semibold text-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-4">Next Moves — What to Buy & When</h2>
+            {orderMessage && (
+              <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${orderMessage.includes('Failed') ? 'bg-loss/20 text-loss' : 'bg-profit/20 text-profit'}`}>
+                {orderMessage}
+              </div>
+            )}
             {recommendations.length === 0 ? (
               <p className="text-sm text-text-muted dark:text-dark-text-muted">Waiting for next analysis cycle...</p>
             ) : (
@@ -424,6 +628,30 @@ function Strategy(): ReactElement {
                           <MiniChart symbol={rec.symbol} />
                         </div>
                       )}
+
+                      {/* Manual trade buttons */}
+                      {rec.symbol && (
+                        <div className="mt-3 flex gap-2">
+                          {rec.action === 'BUY' && rec.quantity > 0 && (
+                            <button
+                              onClick={() => handleManualBuy(rec.symbol, rec.quantity)}
+                              disabled={orderingSymbol === rec.symbol}
+                              className="flex-1 px-3 py-2 text-sm font-bold rounded-lg bg-profit/20 text-profit hover:bg-profit/30 border border-profit/30 transition-colors disabled:opacity-50"
+                            >
+                              {orderingSymbol === rec.symbol ? 'Placing...' : `Buy ${rec.quantity} shares`}
+                            </button>
+                          )}
+                          {rec.action === 'SELL' && rec.quantity > 0 && (
+                            <button
+                              onClick={() => handleManualSell(rec.symbol, rec.quantity)}
+                              disabled={orderingSymbol === rec.symbol}
+                              className="flex-1 px-3 py-2 text-sm font-bold rounded-lg bg-loss/20 text-loss hover:bg-loss/30 border border-loss/30 transition-colors disabled:opacity-50"
+                            >
+                              {orderingSymbol === rec.symbol ? 'Placing...' : `Sell ${rec.quantity} shares`}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -467,6 +695,24 @@ function Strategy(): ReactElement {
                     <p className="text-xs text-text-secondary dark:text-dark-text-secondary">
                       {pos.signalReason}
                     </p>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => handleManualSell(pos.symbol, pos.shares)}
+                        disabled={orderingSymbol === pos.symbol}
+                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-loss/20 text-loss hover:bg-loss/30 border border-loss/30 transition-colors disabled:opacity-50"
+                      >
+                        {orderingSymbol === pos.symbol ? 'Selling...' : `Sell All (${pos.shares})`}
+                      </button>
+                      {pos.shares > 1 && (
+                        <button
+                          onClick={() => handleManualSell(pos.symbol, Math.ceil(pos.shares / 2))}
+                          disabled={orderingSymbol === pos.symbol}
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-warning/20 text-warning hover:bg-warning/30 border border-warning/30 transition-colors disabled:opacity-50"
+                        >
+                          Sell Half ({Math.ceil(pos.shares / 2)})
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

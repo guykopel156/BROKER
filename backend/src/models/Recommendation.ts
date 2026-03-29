@@ -8,6 +8,16 @@ export interface IRecommendation extends Document {
   confidence: number;
   strategy: string;
   holdType: 'short' | 'long';
+  entryPrice: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  trailingStopPct: number;
+  highestPrice: number;
+  scaledIn: boolean;
+  sector: string;
+  isActive: boolean;
+  closedAt: Date | null;
+  closeReason: string | null;
   cycleTimestamp: Date;
 }
 
@@ -20,6 +30,16 @@ const recommendationSchema = new Schema<IRecommendation>(
     confidence: { type: Number, required: true },
     strategy: { type: String, default: '' },
     holdType: { type: String, default: 'short', enum: ['short', 'long'] },
+    entryPrice: { type: Number, default: 0 },
+    stopLoss: { type: Number, default: null },
+    takeProfit: { type: Number, default: null },
+    trailingStopPct: { type: Number, default: 15 },
+    highestPrice: { type: Number, default: 0 },
+    scaledIn: { type: Boolean, default: false },
+    sector: { type: String, default: '' },
+    isActive: { type: Boolean, default: true },
+    closedAt: { type: Date, default: null },
+    closeReason: { type: String, default: null },
     cycleTimestamp: { type: Date, default: Date.now, index: true },
   },
   { timestamps: true }

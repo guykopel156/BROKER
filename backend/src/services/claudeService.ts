@@ -3,24 +3,15 @@ import Anthropic from '@anthropic-ai/sdk';
 import config from '../config';
 import { AppError } from '../utils';
 
-import type { MarketContext, TradeDecision } from '../types/claude';
-
-const RESPONSE_FORMAT_INSTRUCTION = `
-You MUST respond with valid JSON only. No markdown, no explanation outside JSON.
-Respond with an array of trade decisions:
-[
-  {
-    "action": "BUY" | "SELL" | "HOLD",
-    "symbol": "TICKER",
-    "quantity": number,
-    "reasoning": "detailed explanation",
-    "confidence": 0-100,
-    "strategy": "strategy name"
-  }
-]
-If no action should be taken, respond with:
-[{ "action": "HOLD", "symbol": "", "quantity": 0, "reasoning": "explanation", "confidence": 0, "strategy": "" }]
-`;
+import type {
+  CycleInput,
+  CycleOutput,
+  PositionReviewEntry,
+  NewTradeEntry,
+  WatchlistSkippedEntry,
+  StabilityLogEntry,
+  CycleSummaryOutput,
+} from '../types/claude';
 
 class ClaudeService {
   private client: Anthropic;
@@ -35,21 +26,62 @@ class ClaudeService {
     });
   }
 
-  async getTradeDecisions(
-    context: MarketContext,
-    strategyPrompt: string,
-    previousPicks?: Array<{ symbol: string; action: string; quantity: number; strategy: string }>
-  ): Promise<TradeDecision[]> {
+  async getStructuredDecisions(
+    input: CycleInput,
+    strategyPrompt: string
+  ): Promise<CycleOutput> {
     if (!config.anthropicApiKey) {
       throw new AppError(500, 'CLAUDE_NOT_CONFIGURED', 'Anthropic API key is not configured');
     }
 
-    const userMessage = this.buildContextMessage(context, previousPicks);
+    const userMessage = JSON.stringify({
+      account: {
+        available_cash: input.account.availableCash,
+        total_portfolio_value: input.account.totalPortfolioValue,
+        open_positions: input.account.openPositions.map((p) => ({
+          ticker: p.ticker,
+          direction: p.direction,
+          entry_price: p.entryPrice,
+          current_price: p.currentPrice,
+          quantity: p.quantity,
+          stop_loss: p.stopLoss,
+          take_profit: p.takeProfit,
+          open_date: p.openDate,
+          strategy_type: p.strategyType,
+          rationale: p.rationale,
+        })),
+      },
+      watchlist: input.watchlist.map((w) => ({
+        ticker: w.ticker,
+        price: w.price,
+        volume: w.volume,
+        avg_volume_10d: w.avgVolume10d,
+        rsi_14: w.rsi14,
+        macd_line: w.macdLine,
+        macd_signal: w.macdSignal,
+        macd_hist: w.macdHist,
+        ma20: w.ma20,
+        ma50: w.ma50,
+        ma200: w.ma200,
+        atr_14: w.atr14,
+        week_high_52: w.weekHigh52,
+        week_low_52: w.weekLow52,
+        change_pct_1d: w.changePct1d,
+        change_pct_5d: w.changePct5d,
+        sentiment_score: w.sentimentScore,
+      })),
+      previous_cycle_summary: input.previousCycleSummary.map((p) => ({
+        ticker: p.ticker,
+        action: p.action,
+        reasoning: p.reasoning,
+        outcome: p.outcome,
+      })),
+    }, null, 2);
 
     const response = await this.client.messages.create({
       model: config.claudeModel,
-      max_tokens: 2048,
-      system: `${strategyPrompt}\n\n${RESPONSE_FORMAT_INSTRUCTION}`,
+      max_tokens: 4096,
+      system: strategyPrompt,
       messages: [{ role: 'user', content: userMessage }],
     });
 
@@ -58,115 +90,90 @@ class ClaudeService {
       throw new AppError(500, 'CLAUDE_INVALID_RESPONSE', 'Claude returned non-text response');
     }
 
-    return this.parseDecisions(content.text);
+    return this.parseStructuredOutput(content.text);
   }
 
-  private buildContextMessage(context: MarketContext, previousPicks?: Array<{ symbol: string; action: string; quantity: number; strategy: string }>): string {
-    const lines: string[] = [];
-
-    lines.push('=== CURRENT PORTFOLIO ===');
-    lines.push(`Total Value: $${context.portfolio.totalValue.toFixed(2)}`);
-    lines.push(`Available Cash: $${context.portfolio.availableCash.toFixed(2)}`);
-    lines.push(`Today P&L: $${context.portfolio.todayPnl.toFixed(2)}`);
-
-    if (context.portfolio.openPositions.length > 0) {
-      lines.push('\nOpen Positions:');
-      for (const pos of context.portfolio.openPositions) {
-        lines.push(
-          `  ${pos.symbol}: ${pos.shares} shares @ $${pos.avgEntryPrice.toFixed(2)} | ` +
-          `Current: $${pos.currentPrice.toFixed(2)} | ` +
-          `P&L: $${pos.unrealizedPnl.toFixed(2)} (${pos.unrealizedPnlPercent.toFixed(2)}%)`
-        );
-      }
-    } else {
-      lines.push('\nNo open positions.');
-    }
-
-    const availableCash = context.portfolio.availableCash;
-    lines.push(`\n=== BUDGET CONSTRAINT: TOTAL available cash is $${availableCash.toFixed(2)} ===`);
-    lines.push(`This is your TOTAL budget across ALL buys combined.`);
-    lines.push(`If you recommend 2 stocks, they must SHARE this $${availableCash.toFixed(2)}.`);
-    lines.push(`Example: Stock A uses $5, Stock B uses remaining $5.`);
-    lines.push(`NEVER recommend buys that total more than $${availableCash.toFixed(2)}.`);
-
-    lines.push('\n=== MARKET DATA (USE THESE EXACT PRICES) ===');
-    const affordableStocks: string[] = [];
-    const expensiveStocks: string[] = [];
-
-    for (const stock of context.marketData) {
-      const maxShares = Math.floor(availableCash * 0.95 / stock.price);
-      let line =
-        `${stock.symbol}: PRICE=$${stock.price.toFixed(2)} | ` +
-        `Change: ${stock.changePercent.toFixed(2)}% | ` +
-        `Vol: ${stock.volume} | ` +
-        `You can buy: ${maxShares} shares`;
-
-      if (stock.rsi !== undefined) line += ` | RSI: ${stock.rsi.toFixed(1)}`;
-      if (stock.macd !== undefined) line += ` | MACD: ${stock.macd.toFixed(2)}`;
-      if (stock.movingAvg20 !== undefined) line += ` | MA20: $${stock.movingAvg20.toFixed(2)}`;
-      if (stock.movingAvg50 !== undefined) line += ` | MA50: $${stock.movingAvg50.toFixed(2)}`;
-
-      if (maxShares > 0) {
-        affordableStocks.push(line + ' ✅ AFFORDABLE');
-      } else {
-        expensiveStocks.push(line + ' ❌ TOO EXPENSIVE');
-      }
-    }
-
-    if (affordableStocks.length > 0) {
-      lines.push('\nAFFORDABLE (can buy):');
-      affordableStocks.forEach((s) => lines.push(s));
-    }
-    if (expensiveStocks.length > 0) {
-      lines.push('\nTOO EXPENSIVE (skip these):');
-      expensiveStocks.forEach((s) => lines.push(s));
-    }
-
-    if (context.news.length > 0) {
-      lines.push('\n=== NEWS ===');
-      for (const item of context.news) {
-        const symbolTag = item.symbol ? ` [${item.symbol}]` : '';
-        lines.push(`- ${item.title}${symbolTag} (${item.source}, ${item.publishedAt})`);
-      }
-    }
-
-    if (previousPicks && previousPicks.length > 0) {
-      lines.push('\n=== YOUR PREVIOUS RECOMMENDATIONS (last cycle) ===');
-      lines.push('Keep these UNLESS you have a strong reason to change. Stability is important.');
-      for (const pick of previousPicks) {
-        lines.push(`  ${pick.action} ${pick.symbol} — ${pick.quantity} shares — ${pick.strategy}`);
-      }
-      lines.push('If you want to change a pick, explain WHY in your reasoning.');
-      lines.push('Only drop a stock if: better opportunity found, fundamentals changed, or stop loss hit.');
-    }
-
-    lines.push('\n=== INSTRUCTIONS ===');
-    lines.push('Analyze the above data and provide your trading decisions.');
-
-    return lines.join('\n');
-  }
-
-  private parseDecisions(text: string): TradeDecision[] {
+  private parseStructuredOutput(text: string): CycleOutput {
     const cleaned = text.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
 
     try {
-      const parsed: unknown = JSON.parse(cleaned);
+      const parsed: Record<string, unknown> = JSON.parse(cleaned);
 
-      if (!Array.isArray(parsed)) {
-        throw new AppError(500, 'CLAUDE_PARSE_ERROR', 'Claude response is not an array');
-      }
+      const rawSummary = parsed.cycle_summary as Record<string, unknown> | undefined;
+      const cycleSummary: CycleSummaryOutput = {
+        totalPortfolioValue: Number(rawSummary?.total_portfolio_value ?? 0),
+        availableCash: Number(rawSummary?.available_cash ?? 0),
+        reservedCash: Number(rawSummary?.reserved_cash ?? 0),
+        deployableCash: Number(rawSummary?.deployable_cash ?? 0),
+        freedCashFromSells: Number(rawSummary?.freed_cash_from_sells ?? 0),
+        totalDeployable: Number(rawSummary?.total_deployable ?? 0),
+        accountTier: String(rawSummary?.account_tier ?? 'micro') as CycleSummaryOutput['accountTier'],
+        shortTermBudget: Number(rawSummary?.short_term_budget ?? 0),
+        longTermBudget: Number(rawSummary?.long_term_budget ?? 0),
+      };
 
-      return parsed.map((item: Record<string, unknown>) => ({
-        action: String(item.action) as TradeDecision['action'],
-        symbol: String(item.symbol ?? ''),
-        quantity: Number(item.quantity ?? 0),
-        reasoning: String(item.reasoning ?? ''),
-        confidence: Number(item.confidence ?? 0),
-        strategy: String(item.strategy ?? ''),
+      const rawReview = parsed.position_review as Array<Record<string, unknown>> | undefined;
+      const positionReview: PositionReviewEntry[] = (rawReview ?? []).map((r) => ({
+        ticker: String(r.ticker ?? ''),
+        action: String(r.action ?? 'HOLD') as 'HOLD' | 'SELL',
+        sellReason: r.sell_reason ? String(r.sell_reason) as PositionReviewEntry['sellReason'] : null,
+        entryPrice: Number(r.entry_price ?? 0),
+        currentPrice: Number(r.current_price ?? 0),
+        pnlPct: Number(r.pnl_pct ?? 0),
+        reasoning: String(r.reasoning ?? ''),
       }));
+
+      const rawTrades = parsed.new_trades as Array<Record<string, unknown>> | undefined;
+      const newTrades: NewTradeEntry[] = (rawTrades ?? []).map((t) => ({
+        action: 'BUY' as const,
+        ticker: String(t.ticker ?? ''),
+        strategyType: String(t.strategy_type ?? 'SHORT') as 'SHORT' | 'LONG',
+        strategyLabel: String(t.strategy_label ?? ''),
+        price: Number(t.price ?? 0),
+        quantity: Math.floor(Number(t.quantity ?? 0)),
+        allocatedDollars: Number(t.allocated_dollars ?? 0),
+        stopLoss: Number(t.stop_loss ?? 0),
+        takeProfit: t.take_profit != null ? Number(t.take_profit) : null,
+        confidence: Number(t.confidence ?? 0),
+        signalsTriggered: Array.isArray(t.signals_triggered)
+          ? (t.signals_triggered as string[]).map(String)
+          : [],
+        reasoning: String(t.reasoning ?? ''),
+      }));
+
+      const rawSkipped = parsed.watchlist_skipped as Array<Record<string, unknown>> | undefined;
+      const watchlistSkipped: WatchlistSkippedEntry[] = (rawSkipped ?? []).map((s) => ({
+        ticker: String(s.ticker ?? ''),
+        reason: String(s.reason ?? ''),
+      }));
+
+      const rawStability = parsed.stability_log as Array<Record<string, unknown>> | undefined;
+      const stabilityLog: StabilityLogEntry[] = (rawStability ?? []).map((s) => ({
+        ticker: String(s.ticker ?? ''),
+        previousAction: String(s.previous_action ?? ''),
+        priceChangeSinceLastCycle: String(s.price_change_since_last_cycle ?? ''),
+        decision: String(s.decision ?? 'KEEP') as 'KEEP' | 'DROP',
+        justification: String(s.justification ?? ''),
+      }));
+
+      const rawAlerts = parsed.alerts as string[] | undefined;
+      const alerts: string[] = (rawAlerts ?? []).map(String);
+
+      return {
+        cycleSummary,
+        positionReview,
+        newTrades,
+        watchlistSkipped,
+        stabilityLog,
+        alerts,
+      };
     } catch (error) {
       if (error instanceof AppError) throw error;
-      throw new AppError(500, 'CLAUDE_PARSE_ERROR', `Failed to parse Claude response: ${cleaned.substring(0, 200)}`);
+      throw new AppError(
+        500,
+        'CLAUDE_PARSE_ERROR',
+        `Failed to parse Claude response: ${cleaned.substring(0, 300)}`
+      );
     }
   }
 }

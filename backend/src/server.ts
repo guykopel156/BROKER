@@ -4,6 +4,7 @@ import http from 'http';
 
 import config from './config';
 import connectDatabase from './config/database';
+import { migrateStrategyPrompt } from './config/migrateStrategy';
 import { initializeSocket } from './services/socketService';
 import { startEngine } from './services/tradingEngine';
 import ibkrService from './services/ibkrService';
@@ -34,14 +35,17 @@ app.use(errorHandler);
 async function start(): Promise<void> {
   await connectDatabase();
   await ensureAdminExists();
+  await migrateStrategyPrompt();
   initializeSocket(server);
   server.listen(config.port, () => {
     console.log(`Server running on port ${config.port}`);
 
-    // Keep IBKR session alive
+    // Check IBKR gateway and open login page if needed
     if (config.ibkrAccountId) {
-      ibkrService.startKeepAlive();
-      console.log('IBKR keep-alive started (tickle every 55s)');
+      ibkrService.checkGatewayOnStartup().then(() => {
+        ibkrService.startKeepAlive();
+        console.log('IBKR keep-alive started (tickle every 55s)');
+      });
     }
 
     startEngine().catch((err) => {

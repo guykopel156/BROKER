@@ -70,6 +70,28 @@ async function getStockPrice(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // Try grouped data first (no API call, already cached)
+  try {
+    const allStocks = await marketDataService.getAllStocks();
+    const found = allStocks.find((s) => s.T === symbol);
+    if (found) {
+      const data = {
+        symbol,
+        price: found.c,
+        open: found.o,
+        high: found.h,
+        low: found.l,
+        volume: found.v,
+        changePercent: found.o > 0 ? ((found.c - found.o) / found.o) * 100 : 0,
+      };
+      setCache(priceCache, symbol, data);
+      res.json({ data });
+      return;
+    }
+  } catch {
+    // Grouped data not available, fall through
+  }
+
   const data = await marketDataService.getStockPrice(symbol);
   setCache(priceCache, symbol, data);
   res.json({ data });
@@ -108,7 +130,7 @@ async function getStockDetails(req: Request, res: Response): Promise<void> {
     // Skip details
   }
 
-  // Fetch price data
+  // Fetch price data from grouped cache (no extra API call)
   let price = 0;
   let open = 0;
   let high = 0;
@@ -117,13 +139,24 @@ async function getStockDetails(req: Request, res: Response): Promise<void> {
   let changePercent = 0;
 
   try {
-    const priceData = await marketDataService.getStockPrice(symbol);
-    price = priceData.price;
-    open = priceData.open;
-    high = priceData.high;
-    low = priceData.low;
-    volume = priceData.volume;
-    changePercent = priceData.changePercent;
+    const allStocks = await marketDataService.getAllStocks();
+    const found = allStocks.find((s) => s.T === symbol);
+    if (found) {
+      price = found.c;
+      open = found.o;
+      high = found.h;
+      low = found.l;
+      volume = found.v;
+      changePercent = found.o > 0 ? ((found.c - found.o) / found.o) * 100 : 0;
+    } else {
+      const priceData = await marketDataService.getStockPrice(symbol);
+      price = priceData.price;
+      open = priceData.open;
+      high = priceData.high;
+      low = priceData.low;
+      volume = priceData.volume;
+      changePercent = priceData.changePercent;
+    }
   } catch {
     // Skip price
   }

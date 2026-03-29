@@ -4,9 +4,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Strategy = lazy(() => import('./pages/Strategy'));
 const TradeLog = lazy(() => import('./pages/TradeLog'));
-const Positions = lazy(() => import('./pages/Positions'));
-const MyStocks = lazy(() => import('./pages/MyStocks'));
-const Charts = lazy(() => import('./pages/Charts'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 function AppRoutes(): ReactElement {
@@ -16,9 +13,6 @@ function AppRoutes(): ReactElement {
         <Route path="/" element={<Dashboard />} />
         <Route path="/strategy" element={<Strategy />} />
         <Route path="/trade-log" element={<TradeLog />} />
-        <Route path="/positions" element={<Positions />} />
-        <Route path="/my-stocks" element={<MyStocks />} />
-        <Route path="/charts" element={<Charts />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

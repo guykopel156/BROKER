@@ -8,6 +8,8 @@ export interface ISettings extends Document {
   strategyPrompt: string;
   isPaperTrading: boolean;
   isClaudePaused: boolean;
+  polygonTrialStart: Date | null;
+  polygonTrialDays: number;
 }
 
 const settingsSchema = new Schema<ISettings>(
@@ -17,6 +19,8 @@ const settingsSchema = new Schema<ISettings>(
     strategyPrompt: { type: String, required: true, default: DEFAULT_STRATEGY_PROMPT },
     isPaperTrading: { type: Boolean, required: true, default: true },
     isClaudePaused: { type: Boolean, required: true, default: false },
+    polygonTrialStart: { type: Date, default: null },
+    polygonTrialDays: { type: Number, default: 30 },
   },
   { timestamps: true }
 );
